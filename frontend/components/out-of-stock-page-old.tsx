@@ -1,24 +1,61 @@
 "use client"
 
-import { useState, useMemo, useEffect } from "react"
-import { Download, Mail, MessageSquare, Calendar, AlertTriangle, Package, Loader2, CheckCircle } from "lucide-react"
+import { useState, useMemo } from "react"
+import { Download, Mail, MessageSquare, Calendar, AlertTriangle, Package } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
-import { stockService } from "@/services/stock.service"
-import { toast } from "sonner"
+import { useToast } from "@/hooks/use-toast"
 
-interface StockException {
-  id: number
-  sku: string
-  product_title: string
-  category: string
-  qty_short: number
-  order_numbers: string[]
-  timestamp: string
-  resolved: boolean
-}
+// Mock data for demonstration
+const mockShortageData = [
+  {
+    id: "1",
+    sku: "SH-002",
+    title: "Running Shoes Size 10",
+    category: "Footwear",
+    quantityShort: 3,
+    relatedOrders: ["ORD-1002", "ORD-1005", "ORD-1008"],
+    timestamp: new Date(Date.now() - 2 * 60 * 60 * 1000), // 2 hours ago
+  },
+  {
+    id: "2",
+    sku: "WH-003",
+    title: "Bluetooth Speaker Portable",
+    category: "Electronics",
+    quantityShort: 5,
+    relatedOrders: ["ORD-1003", "ORD-1007"],
+    timestamp: new Date(Date.now() - 4 * 60 * 60 * 1000), // 4 hours ago
+  },
+  {
+    id: "3",
+    sku: "CL-008",
+    title: "Winter Jacket Medium",
+    category: "Clothing",
+    quantityShort: 2,
+    relatedOrders: ["ORD-1001"],
+    timestamp: new Date(Date.now() - 6 * 60 * 60 * 1000), // 6 hours ago
+  },
+  {
+    id: "4",
+    sku: "BK-005",
+    title: "Science Fiction Novel",
+    category: "Books",
+    quantityShort: 1,
+    relatedOrders: ["ORD-1004", "ORD-1006"],
+    timestamp: new Date(Date.now() - 1 * 24 * 60 * 60 * 1000), // 1 day ago
+  },
+  {
+    id: "5",
+    sku: "EL-007",
+    title: "Wireless Mouse Gaming",
+    category: "Electronics",
+    quantityShort: 8,
+    relatedOrders: ["ORD-1009", "ORD-1010", "ORD-1011"],
+    timestamp: new Date(Date.now() - 2 * 24 * 60 * 60 * 1000), // 2 days ago
+  },
+]
 
 const dateRangeOptions = [
   { value: "today", label: "Today" },
@@ -29,27 +66,9 @@ const dateRangeOptions = [
 ]
 
 export function OutOfStockPage() {
-  const [shortages, setShortages] = useState<StockException[]>([])
-  const [loading, setLoading] = useState(true)
+  const [shortages, setShortages] = useState(mockShortageData)
   const [selectedDateRange, setSelectedDateRange] = useState("last7days")
-  const [exporting, setExporting] = useState(false)
-
-  useEffect(() => {
-    loadShortages()
-  }, [])
-
-  const loadShortages = async () => {
-    try {
-      setLoading(true)
-      const data = await stockService.getExceptions({ resolved: false })
-      setShortages(data)
-    } catch (error: any) {
-      console.error('Failed to load stock exceptions:', error)
-      toast.error('Failed to load shortages: ' + (error.response?.data?.message || error.message))
-    } finally {
-      setLoading(false)
-    }
-  }
+  const { toast } = useToast()
 
   // Filter shortages based on date range
   const filteredShortages = useMemo(() => {
@@ -58,17 +77,15 @@ export function OutOfStockPage() {
     const startOfYesterday = new Date(startOfToday.getTime() - 24 * 60 * 60 * 1000)
 
     return shortages.filter((shortage) => {
-      const shortageDate = new Date(shortage.timestamp)
-      
       switch (selectedDateRange) {
         case "today":
-          return shortageDate >= startOfToday
+          return shortage.timestamp >= startOfToday
         case "yesterday":
-          return shortageDate >= startOfYesterday && shortageDate < startOfToday
+          return shortage.timestamp >= startOfYesterday && shortage.timestamp < startOfToday
         case "last7days":
-          return shortageDate >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+          return shortage.timestamp >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
         case "last30days":
-          return shortageDate >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+          return shortage.timestamp >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
         case "all":
         default:
           return true
@@ -76,11 +93,10 @@ export function OutOfStockPage() {
     })
   }, [shortages, selectedDateRange])
 
-  const totalShortageQuantity = filteredShortages.reduce((sum, shortage) => sum + shortage.qty_short, 0)
-  const totalAffectedOrders = new Set(filteredShortages.flatMap((shortage) => shortage.order_numbers)).size
+  const totalShortageQuantity = filteredShortages.reduce((sum, shortage) => sum + shortage.quantityShort, 0)
+  const totalAffectedOrders = new Set(filteredShortages.flatMap((shortage) => shortage.relatedOrders)).size
 
-  const formatTimeAgo = (dateString: string) => {
-    const date = new Date(dateString)
+  const formatTimeAgo = (date: Date) => {
     const now = new Date()
     const diffInMinutes = Math.floor((now.getTime() - date.getTime()) / (1000 * 60))
 
@@ -95,61 +111,50 @@ export function OutOfStockPage() {
     }
   }
 
-  const handleExportCSV = async () => {
-    try {
-      setExporting(true)
-      await stockService.exportCSV()
-      toast.success('CSV file downloaded successfully')
-    } catch (error: any) {
-      console.error('Failed to export CSV:', error)
-      toast.error('Failed to export: ' + (error.response?.data?.message || error.message))
-    } finally {
-      setExporting(false)
-    }
+  const handleExportCSV = () => {
+    // In real app, this would generate and download a CSV file
+    const csvContent = [
+      ["SKU", "Product Title", "Category", "Quantity Short", "Related Orders", "Timestamp"],
+      ...filteredShortages.map((shortage) => [
+        shortage.sku,
+        shortage.title,
+        shortage.category,
+        shortage.quantityShort.toString(),
+        shortage.relatedOrders.join("; "),
+        shortage.timestamp.toISOString(),
+      ]),
+    ]
+      .map((row) => row.map((field) => `"${field}"`).join(","))
+      .join("\n")
+
+    const blob = new Blob([csvContent], { type: "text/csv" })
+    const url = window.URL.createObjectURL(blob)
+    const a = document.createElement("a")
+    a.href = url
+    a.download = `out-of-stock-${selectedDateRange}-${new Date().toISOString().split("T")[0]}.csv`
+    a.click()
+    window.URL.revokeObjectURL(url)
+
+    toast({
+      title: "Export Complete",
+      description: "Out-of-stock report has been downloaded as CSV.",
+    })
   }
 
-  const handleSendEmail = async () => {
-    try {
-      await stockService.sendNotification('email')
-      toast.success('Email notification sent successfully')
-    } catch (error: any) {
-      console.error('Failed to send email:', error)
-      toast.error('Failed to send email: ' + (error.response?.data?.message || error.message))
-    }
+  const handleSendEmail = () => {
+    // In real app, this would send an email with the shortage report
+    toast({
+      title: "Email Sent",
+      description: "Out-of-stock report has been sent to the configured email addresses.",
+    })
   }
 
-  const handleSendSMS = async () => {
-    try {
-      await stockService.sendNotification('sms')
-      toast.success('SMS notification sent successfully')
-    } catch (error: any) {
-      console.error('Failed to send SMS:', error)
-      toast.error('Failed to send SMS: ' + (error.response?.data?.message || error.message))
-    }
-  }
-
-  const handleResolveException = async (exceptionId: number, sku: string) => {
-    if (!confirm(`Mark ${sku} as back in stock?`)) return
-    
-    try {
-      await stockService.resolveException(exceptionId)
-      toast.success(`${sku} marked as back in stock!`)
-      await loadShortages()
-    } catch (error: any) {
-      console.error('Failed to resolve exception:', error)
-      toast.error('Failed to mark as resolved: ' + (error.response?.data?.message || error.message))
-    }
-  }
-
-  if (loading) {
-    return (
-      <div className="flex items-center justify-center h-96">
-        <div className="text-center">
-          <Loader2 className="h-8 w-8 animate-spin mx-auto text-primary" />
-          <p className="mt-2 text-muted-foreground">Loading stock exceptions...</p>
-        </div>
-      </div>
-    )
+  const handleSendSMS = () => {
+    // In real app, this would send SMS notifications
+    toast({
+      title: "SMS Sent",
+      description: "Out-of-stock alerts have been sent via SMS.",
+    })
   }
 
   return (
@@ -215,35 +220,24 @@ export function OutOfStockPage() {
                   <div className="flex items-center gap-3 mb-2">
                     <h3 className="text-lg font-bold text-foreground">{shortage.sku}</h3>
                     <Badge variant="destructive" className="text-xs">
-                      {shortage.qty_short} Short
+                      {shortage.quantityShort} Short
                     </Badge>
                   </div>
 
-                  <h4 className="font-medium text-foreground mb-1">{shortage.product_title}</h4>
+                  <h4 className="font-medium text-foreground mb-1">{shortage.title}</h4>
                   <p className="text-sm text-muted-foreground mb-3">{shortage.category}</p>
 
                   <div className="flex items-center gap-4 text-sm">
                     <div className="flex items-center gap-1 text-muted-foreground">
                       <Package className="h-4 w-4" />
-                      <span>Orders: {shortage.order_numbers.length > 0 ? shortage.order_numbers.join(", ") : 'N/A'}</span>
+                      <span>Orders: {shortage.relatedOrders.join(", ")}</span>
                     </div>
                   </div>
                 </div>
 
-                <div className="flex flex-col items-end gap-2">
-                  <div className="text-right">
-                    <div className="text-xs text-muted-foreground mb-1">Reported</div>
-                    <div className="text-sm font-medium">{formatTimeAgo(shortage.timestamp)}</div>
-                  </div>
-                  <Button 
-                    onClick={() => handleResolveException(shortage.id, shortage.sku)}
-                    variant="outline" 
-                    size="sm"
-                    className="flex items-center gap-1"
-                  >
-                    <CheckCircle className="h-3 w-3" />
-                    <span className="hidden sm:inline">Back in Stock</span>
-                  </Button>
+                <div className="text-right">
+                  <div className="text-xs text-muted-foreground mb-1">Reported</div>
+                  <div className="text-sm font-medium">{formatTimeAgo(shortage.timestamp)}</div>
                 </div>
               </div>
             </CardContent>
@@ -255,13 +249,11 @@ export function OutOfStockPage() {
             <AlertTriangle className="h-12 w-12 text-muted-foreground mx-auto mb-4" />
             <h3 className="text-lg font-semibold text-foreground mb-2">No Shortages Found</h3>
             <p className="text-muted-foreground">
-              {shortages.length === 0 ? (
-                'No out-of-stock items reported. Great job!'
-              ) : (
-                `No shortages in the selected time period: ${
-                  dateRangeOptions.find((opt) => opt.value === selectedDateRange)?.label
-                }.`
-              )}
+              {selectedDateRange === "all"
+                ? "No out-of-stock items reported."
+                : `No shortages in the selected time period: ${
+                    dateRangeOptions.find((opt) => opt.value === selectedDateRange)?.label
+                  }.`}
             </p>
           </div>
         )}
@@ -271,23 +263,9 @@ export function OutOfStockPage() {
       {filteredShortages.length > 0 && (
         <div className="sticky bottom-20 bg-background border-t border-border pt-4 mt-6">
           <div className="flex gap-3">
-            <Button 
-              onClick={handleExportCSV} 
-              variant="outline" 
-              className="flex-1 bg-transparent"
-              disabled={exporting}
-            >
-              {exporting ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Exporting...
-                </>
-              ) : (
-                <>
-                  <Download className="h-4 w-4 mr-2" />
-                  Export CSV
-                </>
-              )}
+            <Button onClick={handleExportCSV} variant="outline" className="flex-1 bg-transparent">
+              <Download className="h-4 w-4 mr-2" />
+              Export CSV
             </Button>
             <Button onClick={handleSendEmail} variant="outline" className="flex-1 bg-transparent">
               <Mail className="h-4 w-4 mr-2" />

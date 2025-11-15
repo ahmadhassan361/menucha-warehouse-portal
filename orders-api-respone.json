@@ -1,0 +1,109 @@
+{
+    "success": true,
+    "summary": {
+        "total_orders": 530,
+        "total_items": 2074,
+        "total_unique_skus": 1150,
+        "categories_count": 18,
+        "generated_at": "2025-11-15 02:30:43"
+    },
+    "items_by_category": [
+       
+        {
+            "category_name": "CALEN",
+            "subcategory_count": 2,
+            "total_items": 2,
+            "total_quantity": 2,
+            "subcategories": [
+                {
+                    "subcategory_name": "",
+                    "item_count": 1,
+                    "total_quantity": 1,
+                    "items": [
+                        {
+                            "sku": 7710,
+                            "title": "Calendar L'fi Haofek - 5786",
+                            "item_type": "product",
+                            "total_quantity_needed": 1,
+                            "store_quantity_available": 1,
+                            "price": 5.5,
+                            "weight": "1",
+                            "image_url": "https:\/\/s3.us-east-2.amazonaws.com\/cdn.platform.capitalc.co\/media\/149305\/conversions\/WhatsApp-Image-2025-09-16-at-5.39.25-PM-large.jpg",
+                            "variation_details": null,
+                            "orders": [
+                                {
+                                    "order_id": 539519,
+                                    "quantity": 1,
+                                    "customer_name": "Malka spanier"
+                                }
+                            ]
+                        }
+                    ]
+                },
+                {
+                    "subcategory_name": "CAL",
+                    "item_count": 1,
+                    "total_quantity": 1,
+                    "items": [
+                        {
+                            "sku": "EPP5780S",
+                            "title": "Jewish Pocket Planner 2020 | 5780",
+                            "item_type": "product",
+                            "total_quantity_needed": 1,
+                            "store_quantity_available": 0,
+                            "price": 2.5,
+                            "weight": "0.1",
+                            "image_url": null,
+                            "variation_details": null,
+                            "orders": [
+                                {
+                                    "order_id": 272993,
+                                    "quantity": 1,
+                                    "customer_name": "Barbara Jaffe"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        },
+        {
+            "category_name": "DECO",
+            "subcategory_count": 1,
+            "total_items": 1,
+            "total_quantity": 1,
+            "subcategories": [
+                {
+                    "subcategory_name": "DECO",
+                    "item_count": 1,
+                    "total_quantity": 1,
+                    "items": [
+                        {
+                            "sku": "SC1987",
+                            "title": "Sukkah Crests - Sunset Collection",
+                            "item_type": "product",
+                            "total_quantity_needed": 1,
+                            "store_quantity_available": 0,
+                            "price": 14.99,
+                            "weight": ".2",
+                            "image_url": "https:\/\/cdn.shopeichlers.com\/media\/39946\/conversions\/SC1987-large.jpg",
+                            "variation_details": null,
+                            "orders": [
+                                {
+                                    "order_id": 331643,
+                                    "quantity": 1,
+                                    "customer_name": "Chana Rosental"
+                                }
+                            ]
+                        }
+                    ]
+                }
+            ]
+        }
+    ]
+}
+
+
+
+
+

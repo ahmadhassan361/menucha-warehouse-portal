@@ -1,6 +1,6 @@
 "use client"
 
-import { Package, CheckCircle, AlertTriangle, Settings } from "lucide-react"
+import { Package, CheckCircle, Archive, AlertTriangle, Settings } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface BottomNavigationProps {
@@ -22,11 +22,16 @@ export function BottomNavigation({ activeTab, onTabChange, userRole }: BottomNav
       icon: CheckCircle,
     },
     {
+      id: "packed-orders",
+      label: "Packed Orders",
+      icon: Archive,
+    },
+    {
       id: "out-of-stock",
       label: "Out of Stock",
       icon: AlertTriangle,
     },
-    ...(userRole === "admin"
+    ...((userRole === "admin" || userRole === "superadmin")
       ? [
           {
             id: "admin",
