@@ -71,17 +71,7 @@ export default function LoginPage() {
               {loading ? 'Logging in...' : 'Login'}
             </Button>
           </form>
-          <div className="mt-6 p-3 bg-gray-50 dark:bg-gray-800 rounded-md">
-            <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
-              <strong>Default Credentials:</strong>
-            </p>
-            <p className="text-sm text-gray-600 dark:text-gray-400 text-center mt-1">
-              Username: <code className="font-mono bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded">admin</code>
-            </p>
-            <p className="text-sm text-gray-600 dark:text-gray-400 text-center">
-              Password: <code className="font-mono bg-gray-200 dark:bg-gray-700 px-2 py-0.5 rounded">admin123</code>
-            </p>
-          </div>
+          
         </CardContent>
       </Card>
     </div>
