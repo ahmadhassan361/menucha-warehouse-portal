@@ -259,6 +259,7 @@ class EmailSMSSettings(models.Model):
     smtp_host = models.CharField(max_length=255, blank=True)
     smtp_port = models.IntegerField(default=587, blank=True)
     smtp_use_tls = models.BooleanField(default=True)
+    smtp_use_ssl = models.BooleanField(default=False)  # For port 465
     smtp_username = models.CharField(max_length=255, blank=True)
     smtp_password = models.CharField(max_length=255, blank=True)
     from_email = models.EmailField(blank=True)

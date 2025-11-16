@@ -1,7 +1,8 @@
 import logging
 import csv
 from io import StringIO
-from django.core.mail import send_mail
+from django.core.mail import send_mail, EmailMessage
+from django.core.mail import get_connection
 from django.conf import settings
 from typing import List, Tuple
 from twilio.rest import Client
@@ -57,14 +58,27 @@ class NotificationService:
             if not message:
                 message = NotificationService._build_email_body(exceptions)
             
-            # Send email
-            send_mail(
-                subject=subject,
-                message=message,
-                from_email=email_settings.from_email or settings.DEFAULT_FROM_EMAIL,
-                recipient_list=recipients,
+            # Create custom email connection with SSL/TLS support
+            connection = get_connection(
+                backend='django.core.mail.backends.smtp.EmailBackend',
+                host=email_settings.smtp_host,
+                port=email_settings.smtp_port,
+                username=email_settings.smtp_username,
+                password=email_settings.smtp_password,
+                use_tls=email_settings.smtp_use_tls,
+                use_ssl=email_settings.smtp_use_ssl,
                 fail_silently=False,
             )
+            
+            # Send email using custom connection
+            email = EmailMessage(
+                subject=subject,
+                body=message,
+                from_email=email_settings.from_email or settings.DEFAULT_FROM_EMAIL,
+                to=recipients,
+                connection=connection
+            )
+            email.send()
             
             logger.info(f"Email sent successfully to {len(recipients)} recipient(s)")
             return True, f"Email sent to {len(recipients)} recipient(s)"
@@ -256,14 +270,27 @@ class NotificationService:
             if not email_settings.notification_recipients:
                 return False, "No email recipients configured"
             
-            # Send test email
-            send_mail(
-                subject="Test Email - Order Picking System",
-                message="This is a test email from the Order Picking System. Your email configuration is working correctly.",
-                from_email=email_settings.from_email or settings.DEFAULT_FROM_EMAIL,
-                recipient_list=email_settings.notification_recipients[:1],  # Send to first recipient only
+            # Create custom email connection with SSL/TLS support
+            connection = get_connection(
+                backend='django.core.mail.backends.smtp.EmailBackend',
+                host=email_settings.smtp_host,
+                port=email_settings.smtp_port,
+                username=email_settings.smtp_username,
+                password=email_settings.smtp_password,
+                use_tls=email_settings.smtp_use_tls,
+                use_ssl=email_settings.smtp_use_ssl,
                 fail_silently=False,
             )
+            
+            # Send test email using custom connection
+            email = EmailMessage(
+                subject="Test Email - Order Picking System",
+                body="This is a test email from the Order Picking System. Your email configuration is working correctly.",
+                from_email=email_settings.from_email or settings.DEFAULT_FROM_EMAIL,
+                to=email_settings.notification_recipients[:1],  # Send to first recipient only
+                connection=connection
+            )
+            email.send()
             
             return True, "Test email sent successfully"
             

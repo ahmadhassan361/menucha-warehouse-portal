@@ -1,8 +1,9 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { Search, RefreshCw, Plus, AlertCircle, Loader2 } from "lucide-react"
+import { Search, RefreshCw, Plus, AlertCircle, Loader2, X } from "lucide-react"
 import { NotInStockDialog } from "@/components/not-in-stock-dialog"
+import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
@@ -33,6 +34,8 @@ export function PickListPage() {
   const [notInStockDialogOpen, setNotInStockDialogOpen] = useState(false)
   const [selectedSku, setSelectedSku] = useState("")
   const [selectedItemTitle, setSelectedItemTitle] = useState("")
+  const [previewImage, setPreviewImage] = useState<string | null>(null)
+  const [previewTitle, setPreviewTitle] = useState<string>("")
 
   // Load pick list on mount
   useEffect(() => {
@@ -284,7 +287,11 @@ export function PickListPage() {
                         <img
                           src={item.image_url || "/placeholder.svg"}
                           alt={item.title}
-                          className="w-20 h-20 rounded-md object-cover flex-shrink-0"
+                          onClick={() => {
+                            setPreviewImage(item.image_url || "/placeholder.svg")
+                            setPreviewTitle(item.title)
+                          }}
+                          className="w-20 h-20 rounded-md object-cover flex-shrink-0 cursor-pointer hover:opacity-80 hover:scale-105 transition-all duration-200"
                         />
 
                         <div className="flex-1 min-w-0">
@@ -386,7 +393,11 @@ export function PickListPage() {
                         <img
                           src={item.image_url || "/placeholder.svg"}
                           alt={item.title}
-                          className="w-full h-48 rounded-md object-cover"
+                          onClick={() => {
+                            setPreviewImage(item.image_url || "/placeholder.svg")
+                            setPreviewTitle(item.title)
+                          }}
+                          className="w-full h-48 rounded-md object-cover cursor-pointer hover:opacity-90 transition-opacity duration-200"
                         />
 
                         {/* Title & SKU */}
@@ -518,6 +529,39 @@ export function PickListPage() {
         itemTitle={selectedItemTitle}
         onSuccess={handleNotInStockSuccess}
       />
+
+      {/* Image Preview Dialog */}
+      <Dialog open={!!previewImage} onOpenChange={(open) => !open && setPreviewImage(null)}>
+        <DialogContent className="max-w-[95vw] md:max-w-[90vw] max-h-[95vh] md:max-h-[90vh] p-0 overflow-hidden">
+          <div className="relative w-full h-full flex flex-col items-center justify-center bg-black/95 p-1">
+            {/* Close Button */}
+            <button
+              onClick={() => setPreviewImage(null)}
+              className="absolute top-4 right-4 z-50 p-2 rounded-full bg-black/50 hover:bg-black/70 transition-colors"
+              aria-label="Close preview"
+            >
+              <X className="h-6 w-6 text-white" />
+            </button>
+
+            {/* Image Title - Bottom on mobile, Top on desktop */}
+            {previewTitle && (
+              <div className="absolute bottom-4 md:top-4 left-4 right-4 md:right-auto z-50 bg-black/50 px-4 py-2 rounded-md md:max-w-[calc(100%-80px)]">
+                <p className="text-white text-sm md:text-base font-medium truncate">{previewTitle}</p>
+              </div>
+            )}
+
+            {/* Responsive Image Container */}
+            <div className="w-full h-full flex items-center justify-center">
+              <img
+                src={previewImage || ""}
+                alt={previewTitle}
+                className="max-w-full max-h-[85vh] md:max-h-[80vh] w-auto h-auto object-contain"
+                style={{ objectFit: 'contain' }}
+              />
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }
