@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { Search, RefreshCw, Plus, AlertCircle, Loader2, X } from "lucide-react"
+import { Search, RefreshCw, Plus, AlertCircle, Loader2, X, ChevronDown, ChevronUp } from "lucide-react"
 import { NotInStockDialog } from "@/components/not-in-stock-dialog"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
@@ -36,6 +36,7 @@ export function PickListPage() {
   const [selectedItemTitle, setSelectedItemTitle] = useState("")
   const [previewImage, setPreviewImage] = useState<string | null>(null)
   const [previewTitle, setPreviewTitle] = useState<string>("")
+  const [categoryNavExpanded, setCategoryNavExpanded] = useState(false)
 
   // Load pick list on mount
   useEffect(() => {
@@ -252,8 +253,29 @@ export function PickListPage() {
         {/* Category Quick Navigation */}
         {selectedCategory === "all" && Object.keys(groupedItems).length > 1 && (
           <div className="border-t border-border pt-3">
-            <p className="text-xs text-muted-foreground mb-2 font-medium">Quick Jump to Category:</p>
-            <div className="flex flex-wrap gap-2">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-muted-foreground font-medium">Quick Jump to Category:</p>
+              {/* Collapse/Expand button for mobile only */}
+              <button
+                onClick={() => setCategoryNavExpanded(!categoryNavExpanded)}
+                className="md:hidden text-xs text-primary flex items-center gap-1 hover:underline"
+              >
+                {categoryNavExpanded ? (
+                  <>
+                    <span>Collapse</span>
+                    <ChevronUp className="h-3 w-3" />
+                  </>
+                ) : (
+                  <>
+                    <span>Expand</span>
+                    <ChevronDown className="h-3 w-3" />
+                  </>
+                )}
+              </button>
+            </div>
+            
+            {/* Desktop: Normal flex-wrap */}
+            <div className="hidden md:flex flex-wrap gap-2">
               {Object.entries(groupedItems).map(([category, items]) => (
                 <Badge
                   key={category}
@@ -264,6 +286,41 @@ export function PickListPage() {
                   {category} ({items.length})
                 </Badge>
               ))}
+            </div>
+
+            {/* Mobile: Collapseable with horizontal scroll or wrapped */}
+            <div className="md:hidden">
+              {categoryNavExpanded ? (
+                /* Expanded: Show all with wrap */
+                <div className="flex flex-wrap gap-2">
+                  {Object.entries(groupedItems).map(([category, items]) => (
+                    <Badge
+                      key={category}
+                      variant="outline"
+                      className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors text-xs"
+                      onClick={() => scrollToCategory(category)}
+                    >
+                      {category} ({items.length})
+                    </Badge>
+                  ))}
+                </div>
+              ) : (
+                /* Collapsed: Horizontal scroll */
+                <div className="overflow-x-auto pb-2 -mx-1 px-1">
+                  <div className="flex gap-2 min-w-max">
+                    {Object.entries(groupedItems).map(([category, items]) => (
+                      <Badge
+                        key={category}
+                        variant="outline"
+                        className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors whitespace-nowrap text-xs flex-shrink-0"
+                        onClick={() => scrollToCategory(category)}
+                      >
+                        {category} ({items.length})
+                      </Badge>
+                    ))}
+                  </div>
+                </div>
+              )}
             </div>
           </div>
         )}

@@ -6,6 +6,7 @@ import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
+import { Checkbox } from "@/components/ui/checkbox"
 import { stockService } from "@/services/stock.service"
 import { toast } from "sonner"
 
@@ -18,6 +19,7 @@ interface StockException {
   order_numbers: string[]
   timestamp: string
   resolved: boolean
+  ordered_from_company: boolean
 }
 
 const dateRangeOptions = [
@@ -141,6 +143,23 @@ export function OutOfStockPage() {
     }
   }
 
+  const handleToggleOrderedFromCompany = async (exceptionId: number, sku: string, currentStatus: boolean) => {
+    try {
+      const response = await stockService.toggleOrderedFromCompany(exceptionId)
+      toast.success(response.message)
+      
+      // Update the local state
+      setShortages(prev => prev.map(shortage => 
+        shortage.id === exceptionId 
+          ? { ...shortage, ordered_from_company: response.ordered_from_company }
+          : shortage
+      ))
+    } catch (error: any) {
+      console.error('Failed to toggle ordered status:', error)
+      toast.error('Failed to update: ' + (error.response?.data?.message || error.message))
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -222,11 +241,27 @@ export function OutOfStockPage() {
                   <h4 className="font-medium text-foreground mb-1">{shortage.product_title}</h4>
                   <p className="text-sm text-muted-foreground mb-3">{shortage.category}</p>
 
-                  <div className="flex items-center gap-4 text-sm">
+                  <div className="flex items-center gap-4 text-sm mb-3">
                     <div className="flex items-center gap-1 text-muted-foreground">
                       <Package className="h-4 w-4" />
                       <span>Orders: {shortage.order_numbers.length > 0 ? shortage.order_numbers.join(", ") : 'N/A'}</span>
                     </div>
+                  </div>
+
+                  {/* Ordered from Company Checkbox */}
+                  <div className="flex items-center space-x-2 border-t border-border pt-3">
+                    <Checkbox
+                      id={`ordered-${shortage.id}`}
+                      checked={shortage.ordered_from_company}
+                      onCheckedChange={() => handleToggleOrderedFromCompany(shortage.id, shortage.sku, shortage.ordered_from_company)}
+                      className="h-4 w-4"
+                    />
+                    <label
+                      htmlFor={`ordered-${shortage.id}`}
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                    >
+                      Ordered from company
+                    </label>
                   </div>
                 </div>
 

@@ -191,6 +191,7 @@ class StockException(models.Model):
     reported_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, related_name='stock_exceptions')
     timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
     resolved = models.BooleanField(default=False)
+    ordered_from_company = models.BooleanField(default=False)  # Track if item ordered from supplier
     notes = models.TextField(blank=True)
     
     class Meta:

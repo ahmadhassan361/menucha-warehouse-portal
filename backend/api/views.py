@@ -720,6 +720,27 @@ def resolve_stock_exception_view(request, exception_id):
         return Response({'error': message}, status=status.HTTP_404_NOT_FOUND)
 
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def toggle_ordered_from_company_view(request, exception_id):
+    """Toggle the ordered_from_company status for a stock exception"""
+    try:
+        exception = StockException.objects.get(id=exception_id)
+        exception.ordered_from_company = not exception.ordered_from_company
+        exception.save(update_fields=['ordered_from_company'])
+        
+        status_text = "ordered from company" if exception.ordered_from_company else "not ordered yet"
+        return Response({
+            'message': f'{exception.sku} marked as {status_text}',
+            'ordered_from_company': exception.ordered_from_company
+        }, status=status.HTTP_200_OK)
+    except StockException.DoesNotExist:
+        return Response(
+            {'error': 'Stock exception not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_orders_for_sku_view(request, sku):

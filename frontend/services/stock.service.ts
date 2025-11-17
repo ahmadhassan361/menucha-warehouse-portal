@@ -27,4 +27,9 @@ export const stockService = {
     const response = await api.post(`/out-of-stock/${exceptionId}/resolve`);
     return response.data;
   },
+
+  async toggleOrderedFromCompany(exceptionId: number) {
+    const response = await api.post(`/out-of-stock/${exceptionId}/toggle-ordered`);
+    return response.data;
+  },
 };
