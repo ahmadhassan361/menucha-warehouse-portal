@@ -23,6 +23,9 @@ class OrderImportService:
             'orders_updated': 0,
             'products_created': 0,
             'products_updated': 0,
+            'order_items_created': 0,
+            'order_items_updated': 0,
+            'errors': [],
         }
     
     def sync_orders(self) -> Tuple[bool, str, Dict[str, int]]:
@@ -63,6 +66,7 @@ class OrderImportService:
             self.sync_log.orders_updated = self.stats['orders_updated']
             self.sync_log.products_created = self.stats['products_created']
             self.sync_log.products_updated = self.stats['products_updated']
+            self.sync_log.detailed_errors = self.stats.get('errors', [])
             self.sync_log.save()
             
             # Update API configuration
@@ -131,24 +135,40 @@ class OrderImportService:
                 items = subcategory.get('items', [])
                 
                 for item in items:
-                    # Process product/item
-                    product = self._upsert_product(item, category_name, subcategory_name)
-                    
-                    # Process orders for this item
-                    orders_data = item.get('orders', [])
-                    for order_data in orders_data:
-                        order = self._upsert_order(order_data)
-                        synced_order_ids.add(order.external_order_id)
+                    try:
+                        # Process product/item
+                        product = self._upsert_product(item, category_name, subcategory_name)
                         
-                        # Create/update order item
-                        self._upsert_order_item(
-                            order=order,
-                            product=product,
-                            item=item,
-                            quantity=order_data.get('quantity', 1)
-                        )
+                        # Process orders for this item
+                        orders_data = item.get('orders', [])
+                        for order_data in orders_data:
+                            try:
+                                order = self._upsert_order(order_data)
+                                synced_order_ids.add(order.external_order_id)
+                                
+                                # Create/update order item
+                                self._upsert_order_item(
+                                    order=order,
+                                    product=product,
+                                    item=item,
+                                    quantity=order_data.get('quantity', 1)
+                                )
+                            except Exception as e:
+                                error_msg = f"Failed to process order {order_data.get('order_id')}: {str(e)}"
+                                logger.error(error_msg)
+                                self.stats['errors'].append(error_msg)
+                    except Exception as e:
+                        error_msg = f"Failed to process product {item.get('sku', 'UNKNOWN')}: {str(e)}"
+                        logger.error(error_msg)
+                        self.stats['errors'].append(error_msg)
         
+        # Update orders_fetched to be accurate count of unique orders
+        self.stats['orders_fetched'] = len(synced_order_ids)
         logger.info(f"Parsed {len(synced_order_ids)} unique orders from API")
+        logger.info(f"Stats: Created {self.stats['orders_created']} orders, Updated {self.stats['orders_updated']} orders")
+        logger.info(f"Stats: Created {self.stats['order_items_created']} order items, Updated {self.stats['order_items_updated']} order items")
+        if self.stats['errors']:
+            logger.warning(f"Encountered {len(self.stats['errors'])} errors during sync")
         
         # Auto-mark orders as packed if they're no longer in the API response
         # This ensures pick list only shows currently open orders from the website
@@ -232,7 +252,6 @@ class OrderImportService:
         
         if created:
             self.stats['orders_created'] += 1
-            self.stats['orders_fetched'] += 1
             logger.debug(f"Created order: {order_id} for {customer_name}")
         else:
             # Only update if order is still open (not packed yet)
@@ -240,7 +259,6 @@ class OrderImportService:
                 order.customer_name = customer_name
                 order.save(update_fields=['customer_name', 'updated_at'])
                 self.stats['orders_updated'] += 1
-            self.stats['orders_fetched'] += 1
             logger.debug(f"Found existing order: {order_id}")
         
         return order
@@ -262,11 +280,13 @@ class OrderImportService:
             }
         )
         
-        if not created:
+        if created:
+            self.stats['order_items_created'] += 1
+            logger.debug(f"Created order item: {order.number} - {product.sku} x{quantity}")
+        else:
             # Update quantity if different (but preserve picked/short quantities)
             if order_item.qty_ordered != quantity:
                 order_item.qty_ordered = quantity
                 order_item.save(update_fields=['qty_ordered', 'updated_at'])
+                self.stats['order_items_updated'] += 1
                 logger.debug(f"Updated order item quantity: {order.number} - {product.sku}")
-        else:
-            logger.debug(f"Created order item: {order.number} - {product.sku} x{quantity}")

@@ -319,6 +319,7 @@ class SyncLog(models.Model):
     products_updated = models.IntegerField(default=0)
     
     error_message = models.TextField(blank=True)
+    detailed_errors = models.JSONField(default=list, blank=True)  # List of detailed error objects
     triggered_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True)
     
     class Meta:
