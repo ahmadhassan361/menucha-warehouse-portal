@@ -68,10 +68,18 @@ class OrderImportService:
             # Update API configuration
             config.last_sync_at = timezone.now()
             config.last_sync_status = 'success'
-            config.last_sync_message = f"Synced {self.stats['orders_fetched']} orders successfully"
+            
+            # Build message with auto-packed info if applicable
+            message_parts = [f"Synced {self.stats['orders_fetched']} orders"]
+            if self.stats.get('orders_auto_packed', 0) > 0:
+                message_parts.append(f"{self.stats['orders_auto_packed']} auto-packed")
+            
+            config.last_sync_message = ", ".join(message_parts)
             config.save()
             
             message = f"Sync completed successfully. Orders: {self.stats['orders_created']} created, {self.stats['orders_updated']} updated"
+            if self.stats.get('orders_auto_packed', 0) > 0:
+                message += f", {self.stats['orders_auto_packed']} auto-packed (no longer open on website)"
             logger.info(message)
             
             return True, message, self.stats
@@ -106,6 +114,8 @@ class OrderImportService:
         """
         Parse nested JSON structure and import to database
         Structure: categories → subcategories → items → orders
+        
+        Also marks orders as packed if they're no longer in the API response
         """
         items_by_category = data.get('items_by_category', [])
         
@@ -138,7 +148,29 @@ class OrderImportService:
                             quantity=order_data.get('quantity', 1)
                         )
         
-        logger.info(f"Parsed {len(synced_order_ids)} unique orders")
+        logger.info(f"Parsed {len(synced_order_ids)} unique orders from API")
+        
+        # Auto-mark orders as packed if they're no longer in the API response
+        # This ensures pick list only shows currently open orders from the website
+        orders_to_pack = Order.objects.filter(
+            status__in=['open', 'picking', 'ready_to_pack']
+        ).exclude(
+            external_order_id__in=synced_order_ids
+        )
+        
+        packed_count = 0
+        for order in orders_to_pack:
+            order.status = 'packed'
+            order.packed_at = timezone.now()
+            order.ready_to_pack = False
+            order.save(update_fields=['status', 'packed_at', 'ready_to_pack', 'updated_at'])
+            packed_count += 1
+            logger.info(f"Auto-packed order {order.number} (not in latest API response)")
+        
+        if packed_count > 0:
+            logger.info(f"Auto-packed {packed_count} orders that are no longer open on website")
+        
+        self.stats['orders_auto_packed'] = packed_count
     
     def _upsert_product(self, item: Dict[str, Any], category: str, subcategory: str) -> Product:
         """Create or update product"""
