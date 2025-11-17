@@ -254,11 +254,11 @@ export function OutOfStockPage() {
                       id={`ordered-${shortage.id}`}
                       checked={shortage.ordered_from_company}
                       onCheckedChange={() => handleToggleOrderedFromCompany(shortage.id, shortage.sku, shortage.ordered_from_company)}
-                      className="h-4 w-4"
+                      className="h-5 w-5 border-2 border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
                     />
                     <label
                       htmlFor={`ordered-${shortage.id}`}
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer"
+                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer select-none"
                     >
                       Ordered from company
                     </label>
