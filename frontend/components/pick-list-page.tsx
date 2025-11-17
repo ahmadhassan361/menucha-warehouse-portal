@@ -18,6 +18,7 @@ interface PickListItem {
   title: string
   category: string
   vendor_name?: string
+  variation_details?: string
   image_url: string
   needed: number
   picked: number
@@ -358,6 +359,9 @@ export function PickListPage() {
                           {item.vendor_name && (
                             <p className="text-xs text-muted-foreground">Vendor: {item.vendor_name}</p>
                           )}
+                          {item.variation_details && (
+                            <p className="text-xs text-muted-foreground italic">{item.variation_details}</p>
+                          )}
                           <p className="text-xs text-muted-foreground">{item.category}</p>
 
                           <div className="flex items-center gap-4 mt-3">
@@ -467,6 +471,9 @@ export function PickListPage() {
                           <p className="text-sm text-muted-foreground mt-1">SKU: {item.sku}</p>
                           {item.vendor_name && (
                             <p className="text-xs text-muted-foreground">Vendor: {item.vendor_name}</p>
+                          )}
+                          {item.variation_details && (
+                            <p className="text-xs text-muted-foreground italic">{item.variation_details}</p>
                           )}
                         </div>
 
