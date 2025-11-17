@@ -56,7 +56,7 @@ class ProductSerializer(serializers.ModelSerializer):
     class Meta:
         model = Product
         fields = [
-            'id', 'sku', 'title', 'category', 'subcategory', 
+            'id', 'sku', 'title', 'category', 'subcategory', 'vendor_name',
             'image_url', 'price', 'weight', 'item_type', 
             'store_quantity_available', 'created_at', 'updated_at'
         ]
@@ -197,6 +197,7 @@ class PickListItemSerializer(serializers.Serializer):
     title = serializers.CharField()
     category = serializers.CharField()
     subcategory = serializers.CharField(allow_blank=True)
+    vendor_name = serializers.CharField(allow_blank=True)
     image_url = serializers.URLField(allow_null=True)
     needed = serializers.IntegerField()
     picked = serializers.IntegerField()

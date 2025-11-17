@@ -37,6 +37,7 @@ class PickService:
                     'title': item.title,
                     'category': item.category,
                     'subcategory': item.product.subcategory if item.product else '',
+                    'vendor_name': item.product.vendor_name if item.product else '',
                     'image_url': item.image_url,
                     'needed': 0,
                     'picked': 0,

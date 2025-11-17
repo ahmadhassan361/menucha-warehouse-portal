@@ -194,6 +194,7 @@ class OrderImportService:
                 'title': item.get('title', ''),
                 'category': category,
                 'subcategory': subcategory,
+                'vendor_name': item.get('vendor_name', ''),
                 'image_url': item.get('image_url'),
                 'price': item.get('price'),
                 'weight': str(item.get('weight', '')),
