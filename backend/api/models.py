@@ -194,6 +194,7 @@ class StockException(models.Model):
     timestamp = models.DateTimeField(auto_now_add=True, db_index=True)
     resolved = models.BooleanField(default=False)
     ordered_from_company = models.BooleanField(default=False)  # Track if item ordered from supplier
+    na_cancel = models.BooleanField(default=False)  # Track if item is N/A - Cancel
     notes = models.TextField(blank=True)
     
     class Meta:

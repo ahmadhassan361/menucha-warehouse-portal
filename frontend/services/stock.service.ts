@@ -32,4 +32,9 @@ export const stockService = {
     const response = await api.post(`/out-of-stock/${exceptionId}/toggle-ordered`);
     return response.data;
   },
+
+  async toggleNaCancel(exceptionId: number) {
+    const response = await api.post(`/out-of-stock/${exceptionId}/toggle-na-cancel`);
+    return response.data;
+  },
 };

@@ -148,7 +148,7 @@ class StockExceptionSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'sku', 'product_title', 'category', 'qty_short', 
             'order_numbers', 'reported_by', 'reported_by_name', 
-            'timestamp', 'resolved', 'ordered_from_company', 'notes',
+            'timestamp', 'resolved', 'ordered_from_company', 'na_cancel', 'notes',
             'vendor_name', 'variation_details'
         ]
         read_only_fields = ['id', 'timestamp']

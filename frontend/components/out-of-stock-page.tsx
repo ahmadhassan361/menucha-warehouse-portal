@@ -20,6 +20,7 @@ interface StockException {
   timestamp: string
   resolved: boolean
   ordered_from_company: boolean
+  na_cancel: boolean
   vendor_name?: string
   variation_details?: string
 }
@@ -36,6 +37,7 @@ export function OutOfStockPage() {
   const [shortages, setShortages] = useState<StockException[]>([])
   const [loading, setLoading] = useState(true)
   const [selectedDateRange, setSelectedDateRange] = useState("last7days")
+  const [selectedFilter, setSelectedFilter] = useState("all")
   const [exporting, setExporting] = useState(false)
 
   useEffect(() => {
@@ -55,7 +57,7 @@ export function OutOfStockPage() {
     }
   }
 
-  // Filter shortages based on date range
+  // Filter shortages based on date range and status
   const filteredShortages = useMemo(() => {
     const now = new Date()
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
@@ -64,21 +66,46 @@ export function OutOfStockPage() {
     return shortages.filter((shortage) => {
       const shortageDate = new Date(shortage.timestamp)
       
+      // Date filter
+      let dateMatch = true
       switch (selectedDateRange) {
         case "today":
-          return shortageDate >= startOfToday
+          dateMatch = shortageDate >= startOfToday
+          break
         case "yesterday":
-          return shortageDate >= startOfYesterday && shortageDate < startOfToday
+          dateMatch = shortageDate >= startOfYesterday && shortageDate < startOfToday
+          break
         case "last7days":
-          return shortageDate >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+          dateMatch = shortageDate >= new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000)
+          break
         case "last30days":
-          return shortageDate >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+          dateMatch = shortageDate >= new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000)
+          break
         case "all":
         default:
-          return true
+          dateMatch = true
       }
+
+      // Status filter
+      let statusMatch = true
+      switch (selectedFilter) {
+        case "ordered":
+          statusMatch = shortage.ordered_from_company
+          break
+        case "na_cancel":
+          statusMatch = shortage.na_cancel
+          break
+        case "remaining":
+          statusMatch = !shortage.ordered_from_company && !shortage.na_cancel
+          break
+        case "all":
+        default:
+          statusMatch = true
+      }
+      
+      return dateMatch && statusMatch
     })
-  }, [shortages, selectedDateRange])
+  }, [shortages, selectedDateRange, selectedFilter])
 
   const totalShortageQuantity = filteredShortages.reduce((sum, shortage) => sum + shortage.qty_short, 0)
   const totalAffectedOrders = new Set(filteredShortages.flatMap((shortage) => shortage.order_numbers)).size
@@ -162,6 +189,23 @@ export function OutOfStockPage() {
     }
   }
 
+  const handleToggleNaCancel = async (exceptionId: number, sku: string, currentStatus: boolean) => {
+    try {
+      const response = await stockService.toggleNaCancel(exceptionId)
+      toast.success(response.message)
+      
+      // Update the local state
+      setShortages(prev => prev.map(shortage => 
+        shortage.id === exceptionId 
+          ? { ...shortage, na_cancel: response.na_cancel }
+          : shortage
+      ))
+    } catch (error: any) {
+      console.error('Failed to toggle N/A - Cancel status:', error)
+      toast.error('Failed to update: ' + (error.response?.data?.message || error.message))
+    }
+  }
+
   if (loading) {
     return (
       <div className="flex items-center justify-center h-96">
@@ -175,25 +219,41 @@ export function OutOfStockPage() {
 
   return (
     <div className="p-4 space-y-4">
-      <div className="flex items-center justify-between mb-6">
-        <div>
-          <h1 className="text-2xl font-bold text-foreground mb-2">Out of Stock</h1>
-          <p className="text-muted-foreground">Track shortages and send notifications</p>
-        </div>
+      <div className="mb-6">
+        <div className="flex items-center justify-between mb-4">
+          <div>
+            <h1 className="text-2xl font-bold text-foreground mb-2">Out of Stock</h1>
+            <p className="text-muted-foreground">Track shortages and send notifications</p>
+          </div>
 
-        <Select value={selectedDateRange} onValueChange={setSelectedDateRange}>
-          <SelectTrigger className="w-40">
-            <Calendar className="h-4 w-4 mr-2" />
-            <SelectValue />
-          </SelectTrigger>
-          <SelectContent>
-            {dateRangeOptions.map((option) => (
-              <SelectItem key={option.value} value={option.value}>
-                {option.label}
-              </SelectItem>
-            ))}
-          </SelectContent>
-        </Select>
+          <div className="flex gap-2">
+            <Select value={selectedFilter} onValueChange={setSelectedFilter}>
+              <SelectTrigger className="w-44">
+                <SelectValue placeholder="Filter by status" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="all">All Items</SelectItem>
+                <SelectItem value="ordered">Ordered from Company</SelectItem>
+                <SelectItem value="na_cancel">N/A - Cancel</SelectItem>
+                <SelectItem value="remaining">Remaining</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Select value={selectedDateRange} onValueChange={setSelectedDateRange}>
+              <SelectTrigger className="w-40">
+                <Calendar className="h-4 w-4 mr-2" />
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                {dateRangeOptions.map((option) => (
+                  <SelectItem key={option.value} value={option.value}>
+                    {option.label}
+                  </SelectItem>
+                ))}
+              </SelectContent>
+            </Select>
+          </div>
+        </div>
       </div>
 
       {/* Summary Cards */}
@@ -258,20 +318,39 @@ export function OutOfStockPage() {
                     </div>
                   </div>
 
-                  {/* Ordered from Company Checkbox */}
-                  <div className="flex items-center space-x-2 border-t border-border pt-3">
-                    <Checkbox
-                      id={`ordered-${shortage.id}`}
-                      checked={shortage.ordered_from_company}
-                      onCheckedChange={() => handleToggleOrderedFromCompany(shortage.id, shortage.sku, shortage.ordered_from_company)}
-                      className="h-5 w-5 border-2 border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
-                    />
-                    <label
-                      htmlFor={`ordered-${shortage.id}`}
-                      className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer select-none"
-                    >
-                      Ordered from company
-                    </label>
+                  {/* Checkboxes */}
+                  <div className="space-y-2 border-t border-border pt-3">
+                    {/* Ordered from Company Checkbox */}
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`ordered-${shortage.id}`}
+                        checked={shortage.ordered_from_company}
+                        onCheckedChange={() => handleToggleOrderedFromCompany(shortage.id, shortage.sku, shortage.ordered_from_company)}
+                        className="h-5 w-5 border-2 border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                      />
+                      <label
+                        htmlFor={`ordered-${shortage.id}`}
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer select-none"
+                      >
+                        Ordered from company
+                      </label>
+                    </div>
+                    
+                    {/* N/A - Cancel Checkbox */}
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`na-cancel-${shortage.id}`}
+                        checked={shortage.na_cancel}
+                        onCheckedChange={() => handleToggleNaCancel(shortage.id, shortage.sku, shortage.na_cancel)}
+                        className="h-5 w-5 border-2 border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                      />
+                      <label
+                        htmlFor={`na-cancel-${shortage.id}`}
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer select-none"
+                      >
+                        N/A - Cancel
+                      </label>
+                    </div>
                   </div>
                 </div>
 

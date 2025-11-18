@@ -47,6 +47,7 @@ urlpatterns = [
     path('out-of-stock/send', views.send_notification_view, name='out-of-stock-send'),
     path('out-of-stock/<int:exception_id>/resolve', views.resolve_stock_exception_view, name='resolve-stock-exception'),
     path('out-of-stock/<int:exception_id>/toggle-ordered', views.toggle_ordered_from_company_view, name='toggle-ordered-from-company'),
+    path('out-of-stock/<int:exception_id>/toggle-na-cancel', views.toggle_na_cancel_view, name='toggle-na-cancel'),
     
     # ============================================================================
     # Admin

@@ -741,6 +741,27 @@ def toggle_ordered_from_company_view(request, exception_id):
         )
 
 
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def toggle_na_cancel_view(request, exception_id):
+    """Toggle the na_cancel status for a stock exception"""
+    try:
+        exception = StockException.objects.get(id=exception_id)
+        exception.na_cancel = not exception.na_cancel
+        exception.save(update_fields=['na_cancel'])
+        
+        status_text = "N/A - Cancel" if exception.na_cancel else "active"
+        return Response({
+            'message': f'{exception.sku} marked as {status_text}',
+            'na_cancel': exception.na_cancel
+        }, status=status.HTTP_200_OK)
+    except StockException.DoesNotExist:
+        return Response(
+            {'error': 'Stock exception not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def get_orders_for_sku_view(request, sku):
