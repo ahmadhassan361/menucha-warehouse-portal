@@ -96,15 +96,20 @@ class Order(models.Model):
     
     def check_ready_to_pack(self):
         """
-        Check if all items in this order are fully picked or marked as short
+        Check if all items in this order are fully picked (without any shortages)
         Returns True if ready to pack
+        Orders with ANY shortages should NOT be marked as ready to pack
         """
         items = self.items.all()
         if not items.exists():
             return False
         
         for item in items:
-            if item.qty_picked + item.qty_short < item.qty_ordered:
+            # If any item has shortage, order is NOT ready to pack
+            if item.qty_short > 0:
+                return False
+            # If any item is not fully picked, order is NOT ready to pack
+            if item.qty_picked < item.qty_ordered:
                 return False
         
         return True

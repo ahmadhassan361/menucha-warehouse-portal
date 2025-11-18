@@ -110,20 +110,10 @@ class StockExceptionService:
         except Exception as e:
             logger.error(f"Failed to create stock exception: {str(e)}")
         
-        # Check if any affected orders are now ready to pack
-        orders_ready = []
-        for order_id in affected_order_ids:
-            order = Order.objects.get(id=order_id)
-            
-            # Check if order is now complete (all items picked or marked short)
-            if order.check_ready_to_pack() and not order.ready_to_pack:
-                order.mark_as_ready()
-                orders_ready.append(order.number)
-                logger.info(f"Order {order.number} is now ready to pack (with shortages)")
+        # NOTE: Orders with shortages should NOT be automatically marked as ready to pack
+        # They will only appear in ready-to-pack once ALL items are fully picked (no shortages)
         
         message = f"Marked {total_qty_short}x {sku} as not in stock across {len(order_numbers)} order(s)"
-        if orders_ready:
-            message += f". Orders ready to pack: {', '.join(orders_ready)}"
         
         return True, message, affected_order_ids
     
