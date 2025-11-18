@@ -240,7 +240,8 @@ export function PackedOrdersPage() {
         {orders.map((order) => (
           <Card key={order.id}>
             <CardContent className="p-4">
-              <div className="flex items-center justify-between">
+              {/* Desktop Layout */}
+              <div className="hidden sm:flex items-center justify-between">
                 <div className="flex-1">
                   <div className="flex items-center gap-3 mb-2">
                     <h3 className="text-lg font-bold text-foreground">#{order.number}</h3>
@@ -282,7 +283,7 @@ export function PackedOrdersPage() {
                         className="flex items-center gap-1"
                       >
                         <RotateCcw className="h-3 w-3" />
-                        <span className="hidden sm:inline">Ready</span>
+                        <span>Ready</span>
                       </Button>
                       <Button 
                         onClick={() => handleActionClick(order.id, 'open')}
@@ -291,11 +292,60 @@ export function PackedOrdersPage() {
                         className="flex items-center gap-1"
                       >
                         <RotateCcw className="h-3 w-3" />
-                        <span className="hidden sm:inline">Picking</span>
+                        <span>Picking</span>
                       </Button>
                     </div>
                   )}
                 </div>
+              </div>
+
+              {/* Mobile Layout */}
+              <div className="sm:hidden space-y-3">
+                <div className="flex items-center gap-3 mb-2">
+                  <h3 className="text-lg font-bold text-foreground">#{order.number}</h3>
+                  <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
+                    Packed
+                  </span>
+                </div>
+
+                <div className="space-y-2 text-sm text-muted-foreground">
+                  <div className="flex items-center gap-1">
+                    <User className="h-4 w-4" />
+                    <span>{order.customer_name || 'N/A'}</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Package className="h-4 w-4" />
+                    <span>{order.items_count || 0} items</span>
+                  </div>
+                  <div className="flex items-center gap-1">
+                    <Clock className="h-4 w-4" />
+                    <span>Packed {formatTimeAgo(order.packed_at || order.updated_at)}</span>
+                  </div>
+                  <div className="text-xs text-muted-foreground pt-1">
+                    Packed At: {formatDate(order.packed_at || order.updated_at)}
+                  </div>
+                </div>
+
+                {isAdminOrSuperadmin && (
+                  <div className="flex gap-2 pt-3 border-t border-border">
+                    <Button 
+                      onClick={() => handleActionClick(order.id, 'ready_to_pack')}
+                      variant="outline" 
+                      className="flex-1 flex items-center justify-center gap-2"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      <span>Ready to Pack</span>
+                    </Button>
+                    <Button 
+                      onClick={() => handleActionClick(order.id, 'open')}
+                      variant="outline" 
+                      className="flex-1 flex items-center justify-center gap-2"
+                    >
+                      <RotateCcw className="h-4 w-4" />
+                      <span>Picking</span>
+                    </Button>
+                  </div>
+                )}
               </div>
             </CardContent>
           </Card>
