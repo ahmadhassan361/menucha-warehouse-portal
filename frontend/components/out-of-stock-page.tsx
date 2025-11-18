@@ -420,10 +420,10 @@ export function OutOfStockPage() {
                 <Mail className="h-4 w-4 mr-2" />
                 Send Email
               </Button>
-              <Button onClick={handleSendSMS} variant="outline" className="flex-1">
+              {/* <Button onClick={handleSendSMS} variant="outline" className="flex-1">
                 <MessageSquare className="h-4 w-4 mr-2" />
                 Send SMS
-              </Button>
+              </Button> */}
             </div>
           </div>
         </div>
