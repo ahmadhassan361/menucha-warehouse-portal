@@ -20,6 +20,8 @@ interface StockException {
   timestamp: string
   resolved: boolean
   ordered_from_company: boolean
+  vendor_name?: string
+  variation_details?: string
 }
 
 const dateRangeOptions = [
@@ -239,7 +241,15 @@ export function OutOfStockPage() {
                   </div>
 
                   <h4 className="font-medium text-foreground mb-1">{shortage.product_title}</h4>
-                  <p className="text-sm text-muted-foreground mb-3">{shortage.category}</p>
+                  <div className="text-sm text-muted-foreground space-y-0.5 mb-3">
+                    <div>Category: {shortage.category}</div>
+                    {shortage.vendor_name && (
+                      <div>Vendor: {shortage.vendor_name}</div>
+                    )}
+                    {shortage.variation_details && (
+                      <div className="italic">{shortage.variation_details}</div>
+                    )}
+                  </div>
 
                   <div className="flex items-center gap-4 text-sm mb-3">
                     <div className="flex items-center gap-1 text-muted-foreground">

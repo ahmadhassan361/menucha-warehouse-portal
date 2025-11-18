@@ -746,10 +746,10 @@ def toggle_ordered_from_company_view(request, exception_id):
 def get_orders_for_sku_view(request, sku):
     """Get all orders that need a specific SKU (for not-in-stock dialog)"""
     try:
-        # Get all open orders (not packed) that have this SKU
+        # Get all open/picking orders (not packed) that have this SKU
         order_items = OrderItem.objects.filter(
             sku=sku,
-            order__status='open',
+            order__status__in=['open', 'picking'],
             order__ready_to_pack=False
         ).select_related('order').order_by('order__created_at')
         

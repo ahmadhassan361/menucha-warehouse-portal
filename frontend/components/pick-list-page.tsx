@@ -30,7 +30,7 @@ export function PickListPage() {
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
-  const [selectedCategory, setSelectedCategory] = useState("all")
+  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null)
   const [pickQuantities, setPickQuantities] = useState<Record<string, number>>({})
   const [notInStockDialogOpen, setNotInStockDialogOpen] = useState(false)
@@ -157,10 +157,28 @@ export function PickListPage() {
     loadPickList()
   }
 
-  // Get unique categories
+  // Toggle category selection
+  const toggleCategory = (category: string) => {
+    setSelectedCategories(prev => {
+      if (prev.includes(category)) {
+        // Remove category
+        return prev.filter(c => c !== category)
+      } else {
+        // Add category
+        return [...prev, category]
+      }
+    })
+  }
+
+  // Clear all category filters
+  const clearCategoryFilters = () => {
+    setSelectedCategories([])
+  }
+
+  // Get unique categories (excluding 'all')
   const categories = useMemo(() => {
     const cats = Array.from(new Set(items.map((item) => item.category || 'Uncategorized')))
-    return ["all", ...cats.filter(c => c).sort()]
+    return cats.filter(c => c).sort()
   }, [items])
 
   // Filter items
@@ -169,11 +187,11 @@ export function PickListPage() {
       const matchesSearch =
         item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.sku.toLowerCase().includes(searchTerm.toLowerCase())
-      const matchesCategory = selectedCategory === "all" || item.category === selectedCategory
+      const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(item.category)
       const hasRemaining = item.remaining > 0
       return matchesSearch && matchesCategory && hasRemaining
     })
-  }, [items, searchTerm, selectedCategory])
+  }, [items, searchTerm, selectedCategories])
 
   // Group items by category
   const groupedItems = useMemo(() => {
@@ -238,25 +256,26 @@ export function PickListPage() {
               className="pl-10"
             />
           </div>
-          <Select value={selectedCategory} onValueChange={setSelectedCategory}>
-            <SelectTrigger className="w-40">
-              <SelectValue placeholder="Category" />
-            </SelectTrigger>
-            <SelectContent>
-              {categories.map((category) => (
-                <SelectItem key={category} value={category}>
-                  {category === "all" ? "All Categories" : category}
-                </SelectItem>
-              ))}
-            </SelectContent>
-          </Select>
+          {selectedCategories.length > 0 && (
+            <Button 
+              onClick={clearCategoryFilters}
+              variant="outline" 
+              size="sm"
+              className="whitespace-nowrap"
+            >
+              <X className="h-4 w-4 mr-1" />
+              Clear Filters ({selectedCategories.length})
+            </Button>
+          )}
         </div>
 
-        {/* Category Quick Navigation */}
-        {selectedCategory === "all" && Object.keys(groupedItems).length > 1 && (
+        {/* Category Filter Chips */}
+        {categories.length > 1 && (
           <div className="border-t border-border pt-3">
             <div className="flex items-center justify-between mb-2">
-              <p className="text-xs text-muted-foreground font-medium">Quick Jump to Category:</p>
+              <p className="text-xs text-muted-foreground font-medium">
+                Filter by Category {selectedCategories.length > 0 && `(${selectedCategories.length} selected)`}:
+              </p>
               {/* Collapse/Expand button for mobile only */}
               <button
                 onClick={() => setCategoryNavExpanded(!categoryNavExpanded)}
@@ -278,16 +297,24 @@ export function PickListPage() {
             
             {/* Desktop: Normal flex-wrap */}
             <div className="hidden md:flex flex-wrap gap-2">
-              {Object.entries(groupedItems).map(([category, items]) => (
-                <Badge
-                  key={category}
-                  variant="outline"
-                  className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors"
-                  onClick={() => scrollToCategory(category)}
-                >
-                  {category} ({items.length})
-                </Badge>
-              ))}
+              {categories.map((category) => {
+                const isSelected = selectedCategories.includes(category)
+                const categoryItemCount = items.filter(item => item.category === category && item.remaining > 0).length
+                return (
+                  <Badge
+                    key={category}
+                    variant={isSelected ? "default" : "outline"}
+                    className={`cursor-pointer transition-colors ${
+                      isSelected 
+                        ? "bg-primary text-primary-foreground hover:bg-primary/90" 
+                        : "hover:bg-primary hover:text-primary-foreground"
+                    }`}
+                    onClick={() => toggleCategory(category)}
+                  >
+                    {category} ({categoryItemCount})
+                  </Badge>
+                )
+              })}
             </div>
 
             {/* Mobile: Collapseable with horizontal scroll or wrapped */}
@@ -295,31 +322,47 @@ export function PickListPage() {
               {categoryNavExpanded ? (
                 /* Expanded: Show all with wrap */
                 <div className="flex flex-wrap gap-2">
-                  {Object.entries(groupedItems).map(([category, items]) => (
-                    <Badge
-                      key={category}
-                      variant="outline"
-                      className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors text-xs"
-                      onClick={() => scrollToCategory(category)}
-                    >
-                      {category} ({items.length})
-                    </Badge>
-                  ))}
+                  {categories.map((category) => {
+                    const isSelected = selectedCategories.includes(category)
+                    const categoryItemCount = items.filter(item => item.category === category && item.remaining > 0).length
+                    return (
+                      <Badge
+                        key={category}
+                        variant={isSelected ? "default" : "outline"}
+                        className={`cursor-pointer transition-colors text-xs ${
+                          isSelected 
+                            ? "bg-primary text-primary-foreground hover:bg-primary/90" 
+                            : "hover:bg-primary hover:text-primary-foreground"
+                        }`}
+                        onClick={() => toggleCategory(category)}
+                      >
+                        {category} ({categoryItemCount})
+                      </Badge>
+                    )
+                  })}
                 </div>
               ) : (
                 /* Collapsed: Horizontal scroll */
                 <div className="overflow-x-auto pb-2 -mx-1 px-1">
                   <div className="flex gap-2 min-w-max">
-                    {Object.entries(groupedItems).map(([category, items]) => (
-                      <Badge
-                        key={category}
-                        variant="outline"
-                        className="cursor-pointer hover:bg-primary hover:text-primary-foreground transition-colors whitespace-nowrap text-xs flex-shrink-0"
-                        onClick={() => scrollToCategory(category)}
-                      >
-                        {category} ({items.length})
-                      </Badge>
-                    ))}
+                    {categories.map((category) => {
+                      const isSelected = selectedCategories.includes(category)
+                      const categoryItemCount = items.filter(item => item.category === category && item.remaining > 0).length
+                      return (
+                        <Badge
+                          key={category}
+                          variant={isSelected ? "default" : "outline"}
+                          className={`cursor-pointer transition-colors whitespace-nowrap text-xs flex-shrink-0 ${
+                            isSelected 
+                              ? "bg-primary text-primary-foreground hover:bg-primary/90" 
+                              : "hover:bg-primary hover:text-primary-foreground"
+                          }`}
+                          onClick={() => toggleCategory(category)}
+                        >
+                          {category} ({categoryItemCount})
+                        </Badge>
+                      )
+                    })}
                   </div>
                 </div>
               )}
@@ -584,7 +627,7 @@ export function PickListPage() {
                   <p className="text-sm mt-2">Click "Sync Now" to import orders from the API</p>
                 </>
               ) : (
-                searchTerm || selectedCategory !== "all"
+                searchTerm || selectedCategories.length > 0
                   ? "No items match your search criteria"
                   : "All items have been picked!"
               )}

@@ -67,6 +67,7 @@ class OrderItemSerializer(serializers.ModelSerializer):
     """Serializer for OrderItem model"""
     qty_remaining = serializers.IntegerField(read_only=True)
     is_complete = serializers.BooleanField(read_only=True)
+    product = serializers.SerializerMethodField()
     
     class Meta:
         model = OrderItem
@@ -76,6 +77,16 @@ class OrderItemSerializer(serializers.ModelSerializer):
             'qty_remaining', 'is_complete', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
+    
+    def get_product(self, obj):
+        """Return product info with vendor_name and variation_details"""
+        if obj.product:
+            return {
+                'id': obj.product.id,
+                'vendor_name': obj.product.vendor_name or '',
+                'variation_details': obj.product.variation_details or ''
+            }
+        return None
 
 
 class OrderSerializer(serializers.ModelSerializer):
@@ -129,15 +140,36 @@ class PickEventSerializer(serializers.ModelSerializer):
 class StockExceptionSerializer(serializers.ModelSerializer):
     """Serializer for StockException model"""
     reported_by_name = serializers.CharField(source='reported_by.username', read_only=True)
+    vendor_name = serializers.SerializerMethodField()
+    variation_details = serializers.SerializerMethodField()
     
     class Meta:
         model = StockException
         fields = [
             'id', 'sku', 'product_title', 'category', 'qty_short', 
             'order_numbers', 'reported_by', 'reported_by_name', 
-            'timestamp', 'resolved', 'ordered_from_company', 'notes'
+            'timestamp', 'resolved', 'ordered_from_company', 'notes',
+            'vendor_name', 'variation_details'
         ]
         read_only_fields = ['id', 'timestamp']
+    
+    def get_vendor_name(self, obj):
+        """Get vendor_name from related product"""
+        try:
+            from .models import Product
+            product = Product.objects.filter(sku=obj.sku).first()
+            return product.vendor_name if product else ''
+        except:
+            return ''
+    
+    def get_variation_details(self, obj):
+        """Get variation_details from related product"""
+        try:
+            from .models import Product
+            product = Product.objects.filter(sku=obj.sku).first()
+            return product.variation_details if product else ''
+        except:
+            return ''
 
 
 class APIConfigurationSerializer(serializers.ModelSerializer):

@@ -26,6 +26,10 @@ interface OrderItem {
   qty_ordered: number
   qty_picked: number
   qty_short: number
+  product?: {
+    vendor_name?: string
+    variation_details?: string
+  }
 }
 
 interface ReadyOrder {
@@ -246,7 +250,15 @@ export function ReadyToPackPage() {
                             className="bg-muted/30 rounded-md p-3 text-sm"
                           >
                             <div className="font-medium mb-1">{item.title}</div>
-                            <div className="text-xs text-muted-foreground mb-2">SKU: {item.sku}</div>
+                            <div className="text-xs text-muted-foreground space-y-0.5 mb-2">
+                              <div>SKU: {item.sku}</div>
+                              {item.product?.vendor_name && (
+                                <div>Vendor: {item.product.vendor_name}</div>
+                              )}
+                              {item.product?.variation_details && (
+                                <div className="italic">{item.product.variation_details}</div>
+                              )}
+                            </div>
                             <div className="flex justify-between items-center">
                               <span className="text-xs">Ordered: {item.qty_ordered}</span>
                               <span className="text-xs">Picked: {item.qty_picked}</span>
