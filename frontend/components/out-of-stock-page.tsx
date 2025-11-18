@@ -220,15 +220,17 @@ export function OutOfStockPage() {
   return (
     <div className="p-4 space-y-4">
       <div className="mb-6">
-        <div className="flex items-center justify-between mb-4">
-          <div>
-            <h1 className="text-2xl font-bold text-foreground mb-2">Out of Stock</h1>
-            <p className="text-muted-foreground">Track shortages and send notifications</p>
+        <div className="flex flex-col gap-4">
+          <div className="flex items-center justify-between">
+            <div>
+              <h1 className="text-2xl font-bold text-foreground mb-2">Out of Stock</h1>
+              <p className="text-muted-foreground">Track shortages and send notifications</p>
+            </div>
           </div>
 
-          <div className="flex gap-2">
+          <div className="flex flex-col sm:flex-row gap-2">
             <Select value={selectedFilter} onValueChange={setSelectedFilter}>
-              <SelectTrigger className="w-44">
+              <SelectTrigger className="w-full sm:w-44">
                 <SelectValue placeholder="Filter by status" />
               </SelectTrigger>
               <SelectContent>
@@ -240,7 +242,7 @@ export function OutOfStockPage() {
             </Select>
 
             <Select value={selectedDateRange} onValueChange={setSelectedDateRange}>
-              <SelectTrigger className="w-40">
+              <SelectTrigger className="w-full sm:w-40">
                 <Calendar className="h-4 w-4 mr-2" />
                 <SelectValue />
               </SelectTrigger>
@@ -393,34 +395,36 @@ export function OutOfStockPage() {
 
       {/* Action Buttons */}
       {filteredShortages.length > 0 && (
-        <div className="sticky bottom-20 bg-background border-t border-border pt-4 mt-6">
-          <div className="flex gap-3">
-            <Button 
-              onClick={handleExportCSV} 
-              variant="outline" 
-              className="flex-1 bg-transparent"
-              disabled={exporting}
-            >
-              {exporting ? (
-                <>
-                  <Loader2 className="h-4 w-4 mr-2 animate-spin" />
-                  Exporting...
-                </>
-              ) : (
-                <>
-                  <Download className="h-4 w-4 mr-2" />
-                  Export CSV
-                </>
-              )}
-            </Button>
-            <Button onClick={handleSendEmail} variant="outline" className="flex-1 bg-transparent">
-              <Mail className="h-4 w-4 mr-2" />
-              Send Email
-            </Button>
-            <Button onClick={handleSendSMS} variant="outline" className="flex-1 bg-transparent">
-              <MessageSquare className="h-4 w-4 mr-2" />
-              Send SMS
-            </Button>
+        <div className="sticky bottom-16 left-0 right-0 bg-background/95 backdrop-blur-sm border-t border-border shadow-lg z-10">
+          <div className="max-w-7xl mx-auto px-4 py-4">
+            <div className="flex gap-3">
+              <Button 
+                onClick={handleExportCSV} 
+                variant="outline" 
+                className="flex-1"
+                disabled={exporting}
+              >
+                {exporting ? (
+                  <>
+                    <Loader2 className="h-4 w-4 mr-2 animate-spin" />
+                    Exporting...
+                  </>
+                ) : (
+                  <>
+                    <Download className="h-4 w-4 mr-2" />
+                    Export CSV
+                  </>
+                )}
+              </Button>
+              <Button onClick={handleSendEmail} variant="outline" className="flex-1">
+                <Mail className="h-4 w-4 mr-2" />
+                Send Email
+              </Button>
+              <Button onClick={handleSendSMS} variant="outline" className="flex-1">
+                <MessageSquare className="h-4 w-4 mr-2" />
+                Send SMS
+              </Button>
+            </div>
           </div>
         </div>
       )}
