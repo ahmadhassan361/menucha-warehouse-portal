@@ -1,12 +1,13 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { Download, Mail, MessageSquare, Calendar, AlertTriangle, Package, Loader2, CheckCircle } from "lucide-react"
+import { Download, Mail, MessageSquare, Calendar, AlertTriangle, Package, Loader2, CheckCircle, X } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Checkbox } from "@/components/ui/checkbox"
+import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { stockService } from "@/services/stock.service"
 import { toast } from "sonner"
 
@@ -23,6 +24,7 @@ interface StockException {
   na_cancel: boolean
   vendor_name?: string
   variation_details?: string
+  image_url?: string
 }
 
 const dateRangeOptions = [
@@ -39,6 +41,8 @@ export function OutOfStockPage() {
   const [selectedDateRange, setSelectedDateRange] = useState("last7days")
   const [selectedFilter, setSelectedFilter] = useState("all")
   const [exporting, setExporting] = useState(false)
+  const [previewImage, setPreviewImage] = useState<string | null>(null)
+  const [previewTitle, setPreviewTitle] = useState<string>("")
 
   useEffect(() => {
     loadShortages()
@@ -293,8 +297,20 @@ export function OutOfStockPage() {
         {filteredShortages.map((shortage) => (
           <Card key={shortage.id}>
             <CardContent className="p-4">
-              <div className="flex items-start justify-between">
-                <div className="flex-1">
+              <div className="flex items-start gap-4">
+                {/* Product Image */}
+                <img
+                  src={shortage.image_url || "/placeholder.svg"}
+                  alt={shortage.product_title}
+                  onClick={() => {
+                    setPreviewImage(shortage.image_url || "/placeholder.svg")
+                    setPreviewTitle(shortage.product_title)
+                  }}
+                  className="w-20 h-20 rounded-md object-cover flex-shrink-0 cursor-pointer hover:opacity-80 hover:scale-105 transition-all duration-200"
+                />
+
+                {/* Content */}
+                <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 mb-2">
                     <h3 className="text-lg font-bold text-foreground">{shortage.sku}</h3>
                     <Badge variant="destructive" className="text-xs">
@@ -356,7 +372,8 @@ export function OutOfStockPage() {
                   </div>
                 </div>
 
-                <div className="flex flex-col items-end gap-2">
+                {/* Right Actions */}
+                <div className="flex flex-col items-end gap-2 flex-shrink-0">
                   <div className="text-right">
                     <div className="text-xs text-muted-foreground mb-1">Reported</div>
                     <div className="text-sm font-medium">{formatTimeAgo(shortage.timestamp)}</div>
@@ -428,6 +445,39 @@ export function OutOfStockPage() {
           </div>
         </div>
       )}
+
+      {/* Image Preview Dialog */}
+      <Dialog open={!!previewImage} onOpenChange={(open) => !open && setPreviewImage(null)}>
+        <DialogContent className="max-w-[95vw] md:max-w-[90vw] max-h-[95vh] md:max-h-[90vh] p-0 overflow-hidden">
+          <div className="relative w-full h-full flex flex-col items-center justify-center bg-black/95 p-1">
+            {/* Close Button */}
+            <button
+              onClick={() => setPreviewImage(null)}
+              className="absolute top-4 right-4 z-50 p-2 rounded-full bg-black/50 hover:bg-black/70 transition-colors"
+              aria-label="Close preview"
+            >
+              <X className="h-6 w-6 text-white" />
+            </button>
+
+            {/* Image Title - Bottom on mobile, Top on desktop */}
+            {previewTitle && (
+              <div className="absolute bottom-4 md:top-4 left-4 right-4 md:right-auto z-50 bg-black/50 px-4 py-2 rounded-md md:max-w-[calc(100%-80px)]">
+                <p className="text-white text-sm md:text-base font-medium truncate">{previewTitle}</p>
+              </div>
+            )}
+
+            {/* Responsive Image Container */}
+            <div className="w-full h-full flex items-center justify-center">
+              <img
+                src={previewImage || ""}
+                alt={previewTitle}
+                className="max-w-full max-h-[85vh] md:max-h-[80vh] w-auto h-auto object-contain"
+                style={{ objectFit: 'contain' }}
+              />
+            </div>
+          </div>
+        </DialogContent>
+      </Dialog>
     </div>
   )
 }

@@ -142,6 +142,7 @@ class StockExceptionSerializer(serializers.ModelSerializer):
     reported_by_name = serializers.CharField(source='reported_by.username', read_only=True)
     vendor_name = serializers.SerializerMethodField()
     variation_details = serializers.SerializerMethodField()
+    image_url = serializers.SerializerMethodField()
     
     class Meta:
         model = StockException
@@ -149,7 +150,7 @@ class StockExceptionSerializer(serializers.ModelSerializer):
             'id', 'sku', 'product_title', 'category', 'qty_short', 
             'order_numbers', 'reported_by', 'reported_by_name', 
             'timestamp', 'resolved', 'ordered_from_company', 'na_cancel', 'notes',
-            'vendor_name', 'variation_details'
+            'vendor_name', 'variation_details', 'image_url'
         ]
         read_only_fields = ['id', 'timestamp']
     
@@ -170,6 +171,15 @@ class StockExceptionSerializer(serializers.ModelSerializer):
             return product.variation_details if product else ''
         except:
             return ''
+    
+    def get_image_url(self, obj):
+        """Get image_url from related product"""
+        try:
+            from .models import Product
+            product = Product.objects.filter(sku=obj.sku).first()
+            return product.image_url if product else None
+        except:
+            return None
 
 
 class APIConfigurationSerializer(serializers.ModelSerializer):
