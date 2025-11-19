@@ -297,8 +297,8 @@ export function OutOfStockPage() {
         {filteredShortages.map((shortage) => (
           <Card key={shortage.id}>
             <CardContent className="p-4">
-              <div className="flex items-start gap-4">
-                {/* Product Image */}
+              {/* Mobile Layout: Image on top */}
+              <div className="md:hidden">
                 <img
                   src={shortage.image_url || "/placeholder.svg"}
                   alt={shortage.product_title}
@@ -306,10 +306,8 @@ export function OutOfStockPage() {
                     setPreviewImage(shortage.image_url || "/placeholder.svg")
                     setPreviewTitle(shortage.product_title)
                   }}
-                  className="w-20 h-20 rounded-md object-cover flex-shrink-0 cursor-pointer hover:opacity-80 hover:scale-105 transition-all duration-200"
+                  className="w-full h-48 rounded-md object-cover cursor-pointer hover:opacity-90 transition-opacity duration-200 mb-4"
                 />
-
-                {/* Content */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 mb-2">
                     <h3 className="text-lg font-bold text-foreground">{shortage.sku}</h3>
@@ -372,7 +370,101 @@ export function OutOfStockPage() {
                   </div>
                 </div>
 
-                {/* Right Actions */}
+                {/* Mobile Actions */}
+                <div className="flex justify-between items-center mt-4 pt-3 border-t border-border">
+                  <div className="text-left">
+                    <div className="text-xs text-muted-foreground">Reported</div>
+                    <div className="text-sm font-medium">{formatTimeAgo(shortage.timestamp)}</div>
+                  </div>
+                  <Button 
+                    onClick={() => handleResolveException(shortage.id, shortage.sku)}
+                    variant="outline" 
+                    size="sm"
+                    className="flex items-center gap-1"
+                  >
+                    <CheckCircle className="h-3 w-3" />
+                    Back in Stock
+                  </Button>
+                </div>
+              </div>
+
+              {/* Desktop Layout: Image inline */}
+              <div className="hidden md:flex items-start gap-4">
+                {/* Product Image */}
+                <img
+                  src={shortage.image_url || "/placeholder.svg"}
+                  alt={shortage.product_title}
+                  onClick={() => {
+                    setPreviewImage(shortage.image_url || "/placeholder.svg")
+                    setPreviewTitle(shortage.product_title)
+                  }}
+                  className="w-20 h-20 rounded-md object-cover flex-shrink-0 cursor-pointer hover:opacity-80 hover:scale-105 transition-all duration-200"
+                />
+
+                {/* Content */}
+                <div className="flex-1 min-w-0">
+                  <div className="flex items-center gap-3 mb-2">
+                    <h3 className="text-lg font-bold text-foreground">{shortage.sku}</h3>
+                    <Badge variant="destructive" className="text-xs">
+                      {shortage.qty_short} Short
+                    </Badge>
+                  </div>
+
+                  <h4 className="font-medium text-foreground mb-1">{shortage.product_title}</h4>
+                  <div className="text-sm text-muted-foreground space-y-0.5 mb-3">
+                    <div>Category: {shortage.category}</div>
+                    {shortage.vendor_name && (
+                      <div>Vendor: {shortage.vendor_name}</div>
+                    )}
+                    {shortage.variation_details && (
+                      <div className="italic">{shortage.variation_details}</div>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-4 text-sm mb-3">
+                    <div className="flex items-center gap-1 text-muted-foreground">
+                      <Package className="h-4 w-4" />
+                      <span>Orders: {shortage.order_numbers.length > 0 ? shortage.order_numbers.join(", ") : 'N/A'}</span>
+                    </div>
+                  </div>
+
+                  {/* Checkboxes */}
+                  <div className="space-y-2 border-t border-border pt-3">
+                    {/* Ordered from Company Checkbox */}
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`ordered-desktop-${shortage.id}`}
+                        checked={shortage.ordered_from_company}
+                        onCheckedChange={() => handleToggleOrderedFromCompany(shortage.id, shortage.sku, shortage.ordered_from_company)}
+                        className="h-5 w-5 border-2 border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                      />
+                      <label
+                        htmlFor={`ordered-desktop-${shortage.id}`}
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer select-none"
+                      >
+                        Ordered from company
+                      </label>
+                    </div>
+                    
+                    {/* N/A - Cancel Checkbox */}
+                    <div className="flex items-center space-x-2">
+                      <Checkbox
+                        id={`na-cancel-desktop-${shortage.id}`}
+                        checked={shortage.na_cancel}
+                        onCheckedChange={() => handleToggleNaCancel(shortage.id, shortage.sku, shortage.na_cancel)}
+                        className="h-5 w-5 border-2 border-primary data-[state=checked]:bg-primary data-[state=checked]:text-primary-foreground"
+                      />
+                      <label
+                        htmlFor={`na-cancel-desktop-${shortage.id}`}
+                        className="text-sm font-medium leading-none peer-disabled:cursor-not-allowed peer-disabled:opacity-70 cursor-pointer select-none"
+                      >
+                        N/A - Cancel
+                      </label>
+                    </div>
+                  </div>
+                </div>
+
+                {/* Desktop Right Actions */}
                 <div className="flex flex-col items-end gap-2 flex-shrink-0">
                   <div className="text-right">
                     <div className="text-xs text-muted-foreground mb-1">Reported</div>
@@ -385,7 +477,7 @@ export function OutOfStockPage() {
                     className="flex items-center gap-1"
                   >
                     <CheckCircle className="h-3 w-3" />
-                    <span className="hidden sm:inline">Back in Stock</span>
+                    Back in Stock
                   </Button>
                 </div>
               </div>
