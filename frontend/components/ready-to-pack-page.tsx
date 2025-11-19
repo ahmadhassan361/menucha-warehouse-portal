@@ -26,6 +26,7 @@ interface OrderItem {
   qty_ordered: number
   qty_picked: number
   qty_short: number
+  image_url?: string
   product?: {
     vendor_name?: string
     variation_details?: string
@@ -247,26 +248,36 @@ export function ReadyToPackPage() {
                         {order.items.map((item, index) => (
                           <div
                             key={index}
-                            className="bg-muted/30 rounded-md p-3 text-sm"
+                            className="bg-muted/30 rounded-md p-3 text-sm flex gap-3"
                           >
-                            <div className="font-medium mb-1">{item.title}</div>
-                            <div className="text-xs text-muted-foreground space-y-0.5 mb-2">
-                              <div>SKU: {item.sku}</div>
-                              {item.product?.vendor_name && (
-                                <div>Vendor: {item.product.vendor_name}</div>
-                              )}
-                              {item.product?.variation_details && (
-                                <div className="italic">{item.product.variation_details}</div>
-                              )}
-                            </div>
-                            <div className="flex justify-between items-center">
-                              <span className="text-xs">Ordered: {item.qty_ordered}</span>
-                              <span className="text-xs">Picked: {item.qty_picked}</span>
-                              {item.qty_short > 0 && (
-                                <span className="text-xs text-destructive font-medium">
-                                  Short: {item.qty_short}
-                                </span>
-                              )}
+                            {/* Product Image */}
+                            <img
+                              src={item.image_url || "/placeholder.svg"}
+                              alt={item.title}
+                              className="w-16 h-16 rounded-md object-cover flex-shrink-0"
+                            />
+                            
+                            {/* Item Details */}
+                            <div className="flex-1 min-w-0">
+                              <div className="font-medium mb-1">{item.title}</div>
+                              <div className="text-xs text-muted-foreground space-y-0.5 mb-2">
+                                <div>SKU: {item.sku}</div>
+                                {item.product?.vendor_name && (
+                                  <div>Vendor: {item.product.vendor_name}</div>
+                                )}
+                                {item.product?.variation_details && (
+                                  <div className="italic">{item.product.variation_details}</div>
+                                )}
+                              </div>
+                              <div className="flex justify-between items-center flex-wrap gap-2">
+                                <span className="text-xs">Ordered: {item.qty_ordered}</span>
+                                <span className="text-xs">Picked: {item.qty_picked}</span>
+                                {item.qty_short > 0 && (
+                                  <span className="text-xs text-destructive font-medium">
+                                    Short: {item.qty_short}
+                                  </span>
+                                )}
+                              </div>
                             </div>
                           </div>
                         ))}
