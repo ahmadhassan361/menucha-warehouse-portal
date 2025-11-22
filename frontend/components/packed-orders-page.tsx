@@ -31,6 +31,8 @@ interface PackedOrder {
   number: string
   customer_name: string
   items_count?: number
+  total_shipments: number
+  current_shipment: number
   packed_at?: string
   created_at: string
   updated_at: string
@@ -243,11 +245,16 @@ export function PackedOrdersPage() {
               {/* Desktop Layout */}
               <div className="hidden sm:flex items-center justify-between">
                 <div className="flex-1">
-                  <div className="flex items-center gap-3 mb-2">
+                  <div className="flex items-center gap-3 mb-2 flex-wrap">
                     <h3 className="text-lg font-bold text-foreground">#{order.number}</h3>
                     <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
                       Packed
                     </span>
+                    {order.total_shipments > 1 && (
+                      <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">
+                        📦 {order.total_shipments} Shipments
+                      </span>
+                    )}
                   </div>
 
                   <div className="flex items-center gap-4 text-sm text-muted-foreground flex-wrap">
@@ -301,11 +308,16 @@ export function PackedOrdersPage() {
 
               {/* Mobile Layout */}
               <div className="sm:hidden space-y-3">
-                <div className="flex items-center gap-3 mb-2">
+                <div className="flex items-center gap-2 mb-2 flex-wrap">
                   <h3 className="text-lg font-bold text-foreground">#{order.number}</h3>
                   <span className="text-xs bg-green-100 text-green-800 px-2 py-1 rounded-full">
                     Packed
                   </span>
+                  {order.total_shipments > 1 && (
+                    <span className="text-xs bg-purple-100 text-purple-700 px-2 py-1 rounded-full">
+                      📦 {order.total_shipments} Shipments
+                    </span>
+                  )}
                 </div>
 
                 <div className="space-y-2 text-sm text-muted-foreground">

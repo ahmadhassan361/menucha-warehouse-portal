@@ -5,9 +5,12 @@ from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
 from django.http import HttpResponse
 from django.utils import timezone
-from django.db.models import Q
+from django.db.models import Q, F
 from drf_spectacular.utils import extend_schema, OpenApiParameter
 from datetime import datetime, timedelta
+import logging
+
+logger = logging.getLogger(__name__)
 
 from .models import (
     User, Product, Order, OrderItem, PickEvent,
@@ -19,7 +22,8 @@ from .serializers import (
     OrderItemSerializer, PickEventSerializer, StockExceptionSerializer,
     APIConfigurationSerializer, EmailSMSSettingsSerializer, SyncLogSerializer,
     PickListItemSerializer, PickActionSerializer, NotInStockActionSerializer,
-    MarkPackedSerializer, SendNotificationSerializer, PickListStatsSerializer
+    MarkPackedSerializer, SendNotificationSerializer, PickListStatsSerializer,
+    SplitOrderSerializer
 )
 from .permissions import (
     IsAdmin, IsPicker, IsPacker, IsPickerOrPacker,
@@ -103,6 +107,110 @@ def pick_list_stats_view(request):
     stats = PickService.get_pick_list_stats()
     serializer = PickListStatsSerializer(stats)
     return Response(serializer.data)
+
+
+@extend_schema(
+    parameters=[
+        OpenApiParameter('sort_by', str, description='Sort by field (picked_at, sku, order_number, category)'),
+        OpenApiParameter('order', str, description='Sort order (asc, desc)'),
+        OpenApiParameter('search', str, description='Search by SKU, order number, or title'),
+        OpenApiParameter('category', str, description='Filter by category'),
+        OpenApiParameter('subcategory', str, description='Filter by subcategory'),
+    ],
+    responses={200: OrderItemSerializer(many=True)}
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def picked_items_view(request):
+    """
+    Get all picked items that are not yet ready to pack
+    Shows items with qty_picked > 0 from orders that are still in picking
+    """
+    # Get order items with picks but order not ready
+    picked_items = OrderItem.objects.filter(
+        qty_picked__gt=0,
+        order__ready_to_pack=False,
+        order__status__in=['open', 'picking']
+    ).select_related(
+        'order', 
+        'product'
+    ).prefetch_related(
+        'pick_events__user'
+    ).order_by('-pick_events__timestamp')
+    
+    # Apply search filter
+    search = request.query_params.get('search', '').strip()
+    if search:
+        picked_items = picked_items.filter(
+            Q(sku__icontains=search) |
+            Q(title__icontains=search) |
+            Q(order__number__icontains=search)
+        )
+    
+    # Apply category filter
+    category = request.query_params.get('category', '').strip()
+    if category:
+        picked_items = picked_items.filter(category=category)
+    
+    # Apply subcategory filter
+    subcategory = request.query_params.get('subcategory', '').strip()
+    if subcategory:
+        picked_items = picked_items.filter(product__subcategory=subcategory)
+    
+    # Get unique items (in case of multiple pick events)
+    seen_items = {}
+    unique_items = []
+    for item in picked_items:
+        if item.id not in seen_items:
+            seen_items[item.id] = True
+            unique_items.append(item)
+    
+    # Apply sorting
+    sort_by = request.query_params.get('sort_by', 'picked_at')
+    sort_order = request.query_params.get('order', 'desc')
+    
+    if sort_by == 'sku':
+        unique_items.sort(key=lambda x: x.sku, reverse=(sort_order == 'desc'))
+    elif sort_by == 'order_number':
+        unique_items.sort(key=lambda x: x.order.number, reverse=(sort_order == 'desc'))
+    elif sort_by == 'category':
+        unique_items.sort(key=lambda x: x.category, reverse=(sort_order == 'desc'))
+    else:  # picked_at (default)
+        unique_items.sort(
+            key=lambda x: x.pick_events.latest('timestamp').timestamp if x.pick_events.exists() else x.updated_at,
+            reverse=(sort_order == 'desc')
+        )
+    
+    # Build response with pick event details
+    result = []
+    for item in unique_items:
+        # Get latest pick event for user info
+        latest_pick = item.pick_events.order_by('-timestamp').first()
+        
+        item_data = {
+            'id': item.id,
+            'order_id': item.order.id,
+            'order_number': item.order.number,
+            'customer_name': item.order.customer_name,
+            'sku': item.sku,
+            'title': item.title,
+            'category': item.category,
+            'subcategory': item.product.subcategory if item.product else '',
+            'vendor_name': item.product.vendor_name if item.product else '',
+            'variation_details': item.product.variation_details if item.product else '',
+            'image_url': item.image_url,
+            'qty_ordered': item.qty_ordered,
+            'qty_picked': item.qty_picked,
+            'qty_short': item.qty_short,
+            'qty_remaining': item.qty_remaining,
+            'picked_by': latest_pick.user.username if latest_pick and latest_pick.user else 'Unknown',
+            'picked_by_id': latest_pick.user.id if latest_pick and latest_pick.user else None,
+            'picked_at': latest_pick.timestamp if latest_pick else item.updated_at,
+            'created_at': item.created_at,
+        }
+        result.append(item_data)
+    
+    return Response(result)
 
 
 @extend_schema(
@@ -226,7 +334,7 @@ def order_detail_view(request, order_id):
 @api_view(['POST'])
 @permission_classes([IsAdminOrPacker])
 def mark_packed_view(request, order_id):
-    """Mark an order as packed"""
+    """Mark an order shipment as packed and advance to next shipment if applicable"""
     try:
         order = Order.objects.get(id=order_id)
         
@@ -236,14 +344,37 @@ def mark_packed_view(request, order_id):
                 status=status.HTTP_400_BAD_REQUEST
             )
         
-        order.status = 'packed'
-        order.packed_at = timezone.now()
-        order.packed_by = request.user
-        order.save(update_fields=['status', 'packed_at', 'packed_by', 'updated_at'])
-        
-        return Response({
-            'message': f'Order {order.number} marked as packed'
-        })
+        # Check if this is the last shipment
+        if order.current_shipment >= order.total_shipments:
+            # Last shipment - mark order as fully packed
+            order.status = 'packed'
+            order.packed_at = timezone.now()
+            order.packed_by = request.user
+            order.save(update_fields=['status', 'packed_at', 'packed_by', 'updated_at'])
+            
+            logger.info(f"Order {order.number} fully packed (shipment {order.current_shipment} of {order.total_shipments})")
+            
+            return Response({
+                'message': f'Order {order.number} marked as packed (all {order.total_shipments} shipments complete)'
+            })
+        else:
+            # Not the last shipment - advance to next shipment
+            current_shipment = order.current_shipment
+            order.current_shipment += 1
+            order.status = 'picking'  # Back to picking for next shipment
+            order.ready_to_pack = False
+            order.save(update_fields=['current_shipment', 'status', 'ready_to_pack', 'updated_at'])
+            
+            logger.info(
+                f"Order {order.number} shipment {current_shipment} of {order.total_shipments} packed. "
+                f"Advanced to shipment {order.current_shipment}"
+            )
+            
+            return Response({
+                'message': f'Shipment {current_shipment} of {order.total_shipments} packed. Order advanced to shipment {order.current_shipment}',
+                'next_shipment': order.current_shipment,
+                'total_shipments': order.total_shipments
+            })
         
     except Order.DoesNotExist:
         return Response(
@@ -751,9 +882,32 @@ def toggle_na_cancel_view(request, exception_id):
         exception.save(update_fields=['na_cancel'])
         
         status_text = "N/A - Cancel" if exception.na_cancel else "active"
+        
+        # If marking as cancelled, check if affected orders are now ready to pack
+        orders_made_ready = []
+        if exception.na_cancel:
+            # Get all affected orders
+            affected_orders = Order.objects.filter(
+                number__in=exception.order_numbers,
+                ready_to_pack=False,
+                status__in=['open', 'picking']
+            )
+            
+            for order in affected_orders:
+                # Check if order is now ready to pack
+                if order.check_ready_to_pack():
+                    order.mark_as_ready()
+                    orders_made_ready.append(order.number)
+                    logger.info(f"Order {order.number} is now ready to pack after marking {exception.sku} as cancelled")
+        
+        message = f'{exception.sku} marked as {status_text}'
+        if orders_made_ready:
+            message += f'. Orders now ready to pack: {", ".join(orders_made_ready)}'
+        
         return Response({
-            'message': f'{exception.sku} marked as {status_text}',
-            'na_cancel': exception.na_cancel
+            'message': message,
+            'na_cancel': exception.na_cancel,
+            'orders_made_ready': orders_made_ready
         }, status=status.HTTP_200_OK)
     except StockException.DoesNotExist:
         return Response(
@@ -803,3 +957,263 @@ def get_orders_for_sku_view(request, sku):
     except Exception as e:
         logger.error(f"Error getting orders for SKU {sku}: {str(e)}")
         return Response({'error': str(e)}, status=status.HTTP_500_INTERNAL_SERVER_ERROR)
+
+
+# ============================================================================
+# Order Status Views
+# ============================================================================
+
+@extend_schema(
+    parameters=[
+        OpenApiParameter('status', str, description='Filter by status (open, picking, ready_to_pack, packed)'),
+        OpenApiParameter('search', str, description='Search by order number or customer name'),
+    ],
+    responses={200: OrderSerializer(many=True)}
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def order_status_list_view(request):
+    """
+    Get detailed order status with picking progress
+    By default shows orders before ready-to-pack (open, picking)
+    """
+    status_filter = request.query_params.get('status', 'in_progress')
+    search = request.query_params.get('search', '').strip()
+    
+    # Filter orders based on status
+    if status_filter == 'in_progress':
+        # Default: show all orders not yet ready to pack
+        orders = Order.objects.filter(
+            status__in=['open', 'picking'],
+            ready_to_pack=False
+        )
+    elif status_filter == 'all':
+        orders = Order.objects.all()
+    else:
+        orders = Order.objects.filter(status=status_filter)
+    
+    # Apply search filter
+    if search:
+        orders = orders.filter(
+            Q(number__icontains=search) |
+            Q(customer_name__icontains=search)
+        )
+    
+    # Get orders with related items and pick events
+    orders = orders.prefetch_related(
+        'items__product',
+        'items__pick_events__user'
+    ).order_by('created_at')
+    
+    # Build detailed response
+    result = []
+    for order in orders:
+        items_data = []
+        for item in order.items.all():
+            # Get latest pick event for this item
+            latest_pick = item.pick_events.order_by('-timestamp').first()
+            
+            items_data.append({
+                'id': item.id,
+                'sku': item.sku,
+                'title': item.title,
+                'category': item.category,
+                'subcategory': item.product.subcategory if item.product else '',
+                'vendor_name': item.product.vendor_name if item.product else '',
+                'variation_details': item.product.variation_details if item.product else '',
+                'image_url': item.image_url,
+                'qty_ordered': item.qty_ordered,
+                'qty_picked': item.qty_picked,
+                'qty_short': item.qty_short,
+                'qty_remaining': item.qty_remaining,
+                'shipment_batch': item.shipment_batch,
+                'picked_by': latest_pick.user.username if latest_pick and latest_pick.user else None,
+                'picked_at': latest_pick.timestamp if latest_pick else None,
+            })
+        
+        # Calculate order progress
+        total_items = order.items.count()
+        items_with_picks = order.items.filter(qty_picked__gt=0).count()
+        items_with_shorts = order.items.filter(qty_short__gt=0).count()
+        fully_picked_items = order.items.filter(qty_picked=F('qty_ordered')).count()
+        
+        result.append({
+            'id': order.id,
+            'number': order.number,
+            'customer_name': order.customer_name,
+            'status': order.status,
+            'ready_to_pack': order.ready_to_pack,
+            'total_shipments': order.total_shipments,
+            'current_shipment': order.current_shipment,
+            'created_at': order.created_at,
+            'updated_at': order.updated_at,
+            'customer_message': order.customer_message,
+            'email_sent': order.email_sent,
+            'items': items_data,
+            'progress': {
+                'total_items': total_items,
+                'items_with_picks': items_with_picks,
+                'items_with_shorts': items_with_shorts,
+                'fully_picked_items': fully_picked_items,
+                'completion_percent': int((fully_picked_items / total_items * 100)) if total_items > 0 else 0,
+            }
+        })
+    
+    return Response(result)
+
+
+@extend_schema(
+    request={
+        'application/json': {
+            'type': 'object',
+            'properties': {
+                'customer_message': {'type': 'string'},
+                'email_sent': {'type': 'boolean'},
+            }
+        }
+    },
+    responses={200: {'message': 'string'}}
+)
+@api_view(['PATCH'])
+@permission_classes([IsAuthenticated])
+def update_order_message_view(request, order_id):
+    """Update customer message and email sent status for an order"""
+    try:
+        order = Order.objects.get(id=order_id)
+        
+        customer_message = request.data.get('customer_message')
+        email_sent = request.data.get('email_sent')
+        
+        if customer_message is not None:
+            order.customer_message = customer_message
+        
+        if email_sent is not None:
+            order.email_sent = email_sent
+        
+        order.save(update_fields=['customer_message', 'email_sent', 'updated_at'])
+        
+        return Response({
+            'message': 'Order updated successfully',
+            'customer_message': order.customer_message,
+            'email_sent': order.email_sent
+        })
+        
+    except Order.DoesNotExist:
+        return Response(
+            {'error': 'Order not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+
+# ============================================================================
+# Order Splitting Views
+# ============================================================================
+
+@extend_schema(
+    request=SplitOrderSerializer,
+    responses={200: {'message': 'string', 'total_shipments': 'integer'}}
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def split_order_view(request, order_id):
+    """
+    Split order into multiple shipments by assigning items to batches
+    """
+    try:
+        order = Order.objects.prefetch_related('items').get(id=order_id)
+        
+        # Validate order can be split
+        if order.ready_to_pack or order.status == 'packed':
+            return Response(
+                {'error': 'Cannot split order that is already ready to pack or packed'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        serializer = SplitOrderSerializer(data=request.data)
+        if not serializer.is_valid():
+            return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+        
+        item_batches = serializer.validated_data['item_batches']
+        
+        # Validate all items belong to this order
+        item_ids = [ib['item_id'] for ib in item_batches]
+        order_item_ids = list(order.items.values_list('id', flat=True))
+        
+        invalid_items = set(item_ids) - set(order_item_ids)
+        if invalid_items:
+            return Response(
+                {'error': f'Invalid item IDs: {invalid_items}'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Update item batch assignments
+        max_batch = 1
+        for item_batch in item_batches:
+            item = OrderItem.objects.get(id=item_batch['item_id'])
+            item.shipment_batch = item_batch['batch']
+            item.save(update_fields=['shipment_batch', 'updated_at'])
+            max_batch = max(max_batch, item_batch['batch'])
+        
+        # Update order shipment info
+        order.total_shipments = max_batch
+        order.current_shipment = 1
+        order.save(update_fields=['total_shipments', 'current_shipment', 'updated_at'])
+        
+        logger.info(
+            f"Order {order.number} split into {max_batch} shipments by {request.user.username}"
+        )
+        
+        return Response({
+            'message': f'Order split into {max_batch} shipments',
+            'total_shipments': max_batch,
+            'current_shipment': 1
+        })
+        
+    except Order.DoesNotExist:
+        return Response(
+            {'error': 'Order not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+    except Exception as e:
+        logger.error(f"Error splitting order {order_id}: {str(e)}")
+        return Response(
+            {'error': str(e)},
+            status=status.HTTP_500_INTERNAL_SERVER_ERROR
+        )
+
+
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def unsplit_order_view(request, order_id):
+    """
+    Revert order split - reset all items to batch 1
+    """
+    try:
+        order = Order.objects.prefetch_related('items').get(id=order_id)
+        
+        # Validate order can be unsplit
+        if order.ready_to_pack or order.status == 'packed':
+            return Response(
+                {'error': 'Cannot unsplit order that is already ready to pack or packed'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Reset all items to batch 1
+        order.items.all().update(shipment_batch=1)
+        
+        # Reset order shipment info
+        order.total_shipments = 1
+        order.current_shipment = 1
+        order.save(update_fields=['total_shipments', 'current_shipment', 'updated_at'])
+        
+        logger.info(f"Order {order.number} unsplit by {request.user.username}")
+        
+        return Response({
+            'message': 'Order split reverted - all items reset to single shipment'
+        })
+        
+    except Order.DoesNotExist:
+        return Response(
+            {'error': 'Order not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )

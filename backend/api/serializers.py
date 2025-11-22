@@ -74,7 +74,8 @@ class OrderItemSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'order', 'product', 'sku', 'title', 'category', 
             'image_url', 'qty_ordered', 'qty_picked', 'qty_short', 
-            'qty_remaining', 'is_complete', 'created_at', 'updated_at'
+            'qty_remaining', 'is_complete', 'shipment_batch',
+            'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
     
@@ -99,6 +100,7 @@ class OrderSerializer(serializers.ModelSerializer):
         fields = [
             'id', 'external_order_id', 'number', 'customer_name', 
             'status', 'ready_to_pack', 'packed_at', 'packed_by',
+            'total_shipments', 'current_shipment',
             'items', 'items_count', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
@@ -115,7 +117,8 @@ class OrderListSerializer(serializers.ModelSerializer):
         model = Order
         fields = [
             'id', 'external_order_id', 'number', 'customer_name', 
-            'status', 'ready_to_pack', 'items_count', 'created_at', 'updated_at'
+            'status', 'ready_to_pack', 'total_shipments', 'current_shipment',
+            'items_count', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
     
@@ -292,3 +295,20 @@ class PickListStatsSerializer(serializers.Serializer):
     total_items_remaining = serializers.IntegerField()
     total_orders = serializers.IntegerField()
     categories_count = serializers.IntegerField()
+
+
+class ItemBatchAssignmentSerializer(serializers.Serializer):
+    """Serializer for assigning item to shipment batch"""
+    item_id = serializers.IntegerField()
+    batch = serializers.IntegerField(min_value=1)
+
+
+class SplitOrderSerializer(serializers.Serializer):
+    """Serializer for splitting order into shipments"""
+    item_batches = ItemBatchAssignmentSerializer(many=True)
+    
+    def validate_item_batches(self, value):
+        """Ensure at least one item assigned"""
+        if not value:
+            raise serializers.ValidationError("At least one item must be assigned")
+        return value

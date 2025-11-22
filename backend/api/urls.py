@@ -26,6 +26,7 @@ urlpatterns = [
     path('picklist', views.pick_list_view, name='picklist'),
     path('picklist/stats', views.pick_list_stats_view, name='picklist-stats'),
     path('picklist/<str:sku>/orders', views.get_orders_for_sku_view, name='get-orders-for-sku'),
+    path('picked-items', views.picked_items_view, name='picked-items'),
     path('pick', views.pick_action_view, name='pick'),
     path('not-in-stock', views.not_in_stock_action_view, name='not-in-stock'),
     
@@ -34,10 +35,14 @@ urlpatterns = [
     # ============================================================================
     path('orders/ready-to-pack', views.ready_to_pack_list_view, name='ready-to-pack'),
     path('orders/packed', views.packed_orders_list_view, name='packed-orders'),
+    path('orders/status', views.order_status_list_view, name='order-status'),
     path('orders/<int:order_id>', views.order_detail_view, name='order-detail'),
     path('orders/<int:order_id>/mark-packed', views.mark_packed_view, name='mark-packed'),
+    path('orders/<int:order_id>/update-message', views.update_order_message_view, name='update-order-message'),
     path('orders/<int:order_id>/revert-to-picking', views.revert_to_picking_view, name='revert-to-picking'),
     path('orders/<int:order_id>/change-state', views.change_order_state_view, name='change-order-state'),
+    path('orders/<int:order_id>/split', views.split_order_view, name='split-order'),
+    path('orders/<int:order_id>/unsplit', views.unsplit_order_view, name='unsplit-order'),
     
     # ============================================================================
     # Out of Stock

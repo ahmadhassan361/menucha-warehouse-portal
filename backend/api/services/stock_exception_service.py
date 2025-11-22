@@ -144,9 +144,15 @@ class StockExceptionService:
         return queryset.order_by('-timestamp')
     
     @staticmethod
+    @transaction.atomic
     def resolve_exception(exception_id: int, user) -> Tuple[bool, str]:
         """
-        Mark a stock exception as resolved
+        Mark a stock exception as resolved and restore items to pick list
+        
+        This will:
+        1. Mark the exception as resolved
+        2. Reset qty_short to 0 for all affected order items
+        3. Make items available again in the pick list
         
         Args:
             exception_id: ID of the stock exception
@@ -157,14 +163,101 @@ class StockExceptionService:
         """
         try:
             exception = StockException.objects.get(id=exception_id)
+            
+            # Get the SKU and affected order numbers
+            sku = exception.sku
+            order_numbers = exception.order_numbers
+            
+            # Find all affected order items and reset their qty_short
+            # Include ready_to_pack status as well since order might have been moved there
+            affected_items = OrderItem.objects.filter(
+                sku=sku,
+                order__number__in=order_numbers,
+                order__status__in=['open', 'picking', 'ready_to_pack'],
+                qty_short__gt=0
+            ).select_related('order')
+            
+            items_updated = 0
+            items_skipped = 0
+            orders_to_revert = set()
+            skipped_batches = []
+            
+            for item in affected_items:
+                # Check if item belongs to an already-packed batch
+                # If current_shipment > item's shipment_batch, that batch is already packed
+                if item.order.total_shipments > 1 and item.order.current_shipment > item.shipment_batch:
+                    items_skipped += 1
+                    skipped_batches.append({
+                        'order': item.order.number,
+                        'batch': item.shipment_batch,
+                        'current_batch': item.order.current_shipment
+                    })
+                    logger.warning(
+                        f"Cannot restore SKU {sku} for order {item.order.number} - "
+                        f"item is in batch {item.shipment_batch} which is already packed "
+                        f"(order currently on batch {item.order.current_shipment})"
+                    )
+                    continue
+                
+                # Reset qty_short to 0 to make item available for picking again
+                item.qty_short = 0
+                item.save(update_fields=['qty_short', 'updated_at'])
+                items_updated += 1
+                
+                # If order was in ready_to_pack, it needs to go back to picking
+                # because this item is now available and needs to be picked
+                if item.order.status == 'ready_to_pack' or item.order.ready_to_pack:
+                    orders_to_revert.add(item.order)
+                
+                logger.info(
+                    f"Reset qty_short for order {item.order.number}, SKU {sku} - "
+                    f"item now available in pick list"
+                )
+            
+            # Revert orders back to picking state
+            for order in orders_to_revert:
+                order.status = 'picking'
+                order.ready_to_pack = False
+                order.save(update_fields=['status', 'ready_to_pack', 'updated_at'])
+                logger.info(
+                    f"Reverted order {order.number} from ready_to_pack back to picking "
+                    f"because SKU {sku} is back in stock"
+                )
+            
+            # Mark exception as resolved
             exception.resolved = True
-            exception.notes = f"{exception.notes}\nResolved by {user.username}".strip()
+            exception.notes = f"{exception.notes}\nResolved by {user.username} - {items_updated} order items restored to pick list".strip()
             exception.save(update_fields=['resolved', 'notes'])
             
-            return True, f"Stock exception {exception_id} marked as resolved"
+            revert_count = len(orders_to_revert)
+            logger.info(
+                f"Resolved stock exception {exception_id} for SKU {sku} - "
+                f"{items_updated} items restored to pick list, "
+                f"{revert_count} orders reverted to picking, "
+                f"{items_skipped} items skipped (already-packed batches)"
+            )
+            
+            # Build message
+            if items_updated == 0 and items_skipped > 0:
+                # All items were skipped
+                message = "Cannot restore items - they belong to already-packed batches"
+                for skip_info in skipped_batches:
+                    message += f"\nOrder {skip_info['order']}: Batch {skip_info['batch']} is already packed (currently on batch {skip_info['current_batch']})"
+                return False, message
+            
+            message = f"Stock exception resolved - {items_updated} items restored to pick list"
+            if revert_count > 0:
+                message += f", {revert_count} orders moved back to picking"
+            if items_skipped > 0:
+                message += f"\nWarning: {items_skipped} items could not be restored (already-packed batches)"
+            
+            return True, message
             
         except StockException.DoesNotExist:
             return False, f"Stock exception {exception_id} not found"
+        except Exception as e:
+            logger.error(f"Error resolving stock exception {exception_id}: {str(e)}")
+            return False, f"Error resolving exception: {str(e)}"
     
     @staticmethod
     def get_aggregated_exceptions() -> List[Dict]:

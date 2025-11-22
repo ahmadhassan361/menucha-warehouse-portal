@@ -78,6 +78,14 @@ class Order(models.Model):
     packed_at = models.DateTimeField(null=True, blank=True)
     packed_by = models.ForeignKey(User, on_delete=models.SET_NULL, null=True, blank=True, related_name='packed_orders')
     
+    # Customer communication fields
+    customer_message = models.TextField(blank=True, default='')
+    email_sent = models.BooleanField(default=False)
+    
+    # Shipment splitting fields
+    total_shipments = models.IntegerField(default=1, validators=[MinValueValidator(1)])
+    current_shipment = models.IntegerField(default=1, validators=[MinValueValidator(1)])
+    
     created_at = models.DateTimeField(auto_now_add=True, db_index=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -96,21 +104,48 @@ class Order(models.Model):
     
     def check_ready_to_pack(self):
         """
-        Check if all items in this order are fully picked (without any shortages)
-        Returns True if ready to pack
-        Orders with ANY shortages should NOT be marked as ready to pack
+        Check if all items in CURRENT SHIPMENT BATCH are fully picked or have cancelled out-of-stock
+        Returns True if ready to pack current shipment
+        
+        Logic:
+        - Only checks items in current_shipment batch
+        - Items fully picked (qty_picked == qty_ordered) are complete
+        - Items with shortage (qty_short > 0) are complete IF the shortage has na_cancel=True
+        - Items with remaining qty (qty_remaining > 0) are NOT complete
         """
-        items = self.items.all()
+        # Only check items in the current shipment batch
+        items = self.items.filter(shipment_batch=self.current_shipment)
+        
         if not items.exists():
             return False
         
         for item in items:
-            # If any item has shortage, order is NOT ready to pack
+            # If item is fully picked, it's complete
+            if item.qty_picked == item.qty_ordered:
+                continue
+            
+            # If item has remaining qty that's not picked or short, it's not complete
+            if item.qty_remaining > 0:
+                return False
+            
+            # If item has shortage, check if it's cancelled
             if item.qty_short > 0:
-                return False
-            # If any item is not fully picked, order is NOT ready to pack
-            if item.qty_picked < item.qty_ordered:
-                return False
+                # Check if there's a cancelled stock exception for this SKU in this order
+                # Get all cancelled exceptions for this SKU
+                cancelled_exceptions = StockException.objects.filter(
+                    sku=item.sku,
+                    na_cancel=True
+                )
+                
+                # Check if any exception includes this order number
+                has_cancelled_exception = any(
+                    self.number in exc.order_numbers 
+                    for exc in cancelled_exceptions
+                )
+                
+                if not has_cancelled_exception:
+                    # Shortage exists but not cancelled, order is NOT ready
+                    return False
         
         return True
     
@@ -136,6 +171,9 @@ class OrderItem(models.Model):
     qty_ordered = models.IntegerField(validators=[MinValueValidator(1)])
     qty_picked = models.IntegerField(default=0, validators=[MinValueValidator(0)])
     qty_short = models.IntegerField(default=0, validators=[MinValueValidator(0)])
+    
+    # Shipment batch assignment (1, 2, 3, etc.)
+    shipment_batch = models.IntegerField(default=1, validators=[MinValueValidator(1)])
     
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)

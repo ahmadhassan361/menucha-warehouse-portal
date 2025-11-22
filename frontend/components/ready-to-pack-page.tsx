@@ -26,6 +26,7 @@ interface OrderItem {
   qty_ordered: number
   qty_picked: number
   qty_short: number
+  shipment_batch: number
   image_url?: string
   product?: {
     vendor_name?: string
@@ -38,6 +39,8 @@ interface ReadyOrder {
   number: string
   customer_name: string
   created_at: string
+  total_shipments: number
+  current_shipment: number
   items?: OrderItem[]
   items_count?: number
   notes?: string
@@ -197,8 +200,13 @@ export function ReadyToPackPage() {
                 {/* Order Header */}
                 <div className="flex items-start justify-between mb-3">
                   <div className="flex-1">
-                    <div className="flex items-center gap-3 mb-2">
+                    <div className="flex items-center gap-2 mb-2 flex-wrap">
                       <h3 className="text-lg font-bold text-foreground">#{order.number}</h3>
+                      {order.total_shipments > 1 && (
+                        <Badge variant="secondary" className="bg-purple-100 text-purple-700 border-purple-300 text-xs">
+                          📦 Shipment {order.current_shipment} of {order.total_shipments}
+                        </Badge>
+                      )}
                       {status === "partial" && (
                         <Badge variant="destructive" className="text-xs">
                           {shortageCount} Short
@@ -245,7 +253,8 @@ export function ReadyToPackPage() {
                     </CollapsibleTrigger>
                     <CollapsibleContent className="mt-2">
                       <div className="space-y-2 border-t border-border pt-3">
-                        {order.items.map((item, index) => (
+                        {/* Current Batch Items */}
+                        {order.items.filter(item => item.shipment_batch === order.current_shipment).map((item, index) => (
                           <div
                             key={index}
                             className="bg-muted/30 rounded-md p-3 text-sm flex gap-3"
@@ -259,7 +268,19 @@ export function ReadyToPackPage() {
                             
                             {/* Item Details */}
                             <div className="flex-1 min-w-0">
-                              <div className="font-medium mb-1">{item.title}</div>
+                              <div className="flex items-start gap-2 mb-1">
+                                <div className="font-medium flex-1">{item.title}</div>
+                                {order.total_shipments > 1 && (
+                                  <Badge variant="outline" className="text-xs bg-purple-50 border-purple-300 text-purple-700">
+                                    Batch {item.shipment_batch}
+                                  </Badge>
+                                )}
+                                {item.qty_short > 0 && (
+                                  <Badge variant="outline" className="text-xs border-orange-500 text-orange-600 dark:text-orange-400 whitespace-nowrap">
+                                    ⚠️ Out of Stock
+                                  </Badge>
+                                )}
+                              </div>
                               <div className="text-xs text-muted-foreground space-y-0.5 mb-2">
                                 <div>SKU: {item.sku}</div>
                                 {item.product?.vendor_name && (
@@ -273,14 +294,31 @@ export function ReadyToPackPage() {
                                 <span className="text-xs">Ordered: {item.qty_ordered}</span>
                                 <span className="text-xs">Picked: {item.qty_picked}</span>
                                 {item.qty_short > 0 && (
-                                  <span className="text-xs text-destructive font-medium">
-                                    Short: {item.qty_short}
+                                  <span className="text-xs text-orange-600 dark:text-orange-400 font-medium">
+                                    Short: {item.qty_short} (Out of Stock)
                                   </span>
                                 )}
                               </div>
                             </div>
                           </div>
                         ))}
+                        
+                        {/* Items in Other Batches - Show as info */}
+                        {order.total_shipments > 1 && order.items.filter(item => item.shipment_batch !== order.current_shipment).length > 0 && (
+                          <div className="mt-3 p-3 bg-blue-50 dark:bg-blue-900/20 border border-blue-200 dark:border-blue-800 rounded-md">
+                            <p className="text-sm font-medium text-blue-900 dark:text-blue-100 mb-2">
+                              Items in Other Shipments ({order.items.filter(item => item.shipment_batch !== order.current_shipment).length})
+                            </p>
+                            <div className="space-y-1.5">
+                              {order.items.filter(item => item.shipment_batch !== order.current_shipment).map((item, index) => (
+                                <div key={index} className="text-xs text-blue-800 dark:text-blue-200 flex justify-between">
+                                  <span className="flex-1 truncate">{item.title}</span>
+                                  <span className="ml-2 font-medium whitespace-nowrap">Batch {item.shipment_batch}</span>
+                                </div>
+                              ))}
+                            </div>
+                          </div>
+                        )}
                       </div>
                     </CollapsibleContent>
                   </Collapsible>
@@ -330,12 +368,22 @@ export function ReadyToPackPage() {
           <AlertDialogHeader>
             <AlertDialogTitle>Confirm Pack Order</AlertDialogTitle>
             <AlertDialogDescription>
-              Are you sure you want to mark order <strong>#{selectedOrder?.number}</strong> as packed?
               {selectedOrder && (
-                <div className="mt-2 text-sm">
-                  <div>Customer: {selectedOrder.customer_name}</div>
-                  <div>Items: {getItemCount(selectedOrder)}</div>
-                </div>
+                <>
+                  Are you sure you want to mark {selectedOrder.total_shipments > 1 ? `shipment ${selectedOrder.current_shipment} of ${selectedOrder.total_shipments}` : 'this order'} as packed?
+                  <div className="mt-2 text-sm">
+                    <div>Order: <strong>#{selectedOrder.number}</strong></div>
+                    <div>Customer: {selectedOrder.customer_name}</div>
+                    {selectedOrder.total_shipments > 1 && (
+                      <div className="mt-2 p-2 bg-purple-50 dark:bg-purple-900/20 rounded">
+                        <strong>Note:</strong> This order has {selectedOrder.total_shipments} shipments. 
+                        {selectedOrder.current_shipment < selectedOrder.total_shipments 
+                          ? ` After packing this shipment, the order will advance to shipment ${selectedOrder.current_shipment + 1}.`
+                          : ' This is the final shipment.'}
+                      </div>
+                    )}
+                  </div>
+                </>
               )}
             </AlertDialogDescription>
           </AlertDialogHeader>

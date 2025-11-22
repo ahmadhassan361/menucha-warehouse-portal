@@ -672,6 +672,19 @@ export function AdminPage() {
           </DialogFooter>
         </DialogContent>
       </Dialog>
+
+      {/* Footer */}
+      <footer className="mt-8 pb-4 text-center text-sm text-muted-foreground border-t pt-4">
+        <p>Developed and maintained by <strong>Midpear Studio (PVT)</strong></p>
+        <a 
+          href="https://midpear.com" 
+          target="_blank" 
+          rel="noopener noreferrer"
+          className="text-primary hover:underline"
+        >
+          midpear.com
+        </a>
+      </footer>
     </div>
   )
 }

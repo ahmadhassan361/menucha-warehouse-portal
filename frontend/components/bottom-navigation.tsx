@@ -1,6 +1,6 @@
 "use client"
 
-import { Package, CheckCircle, Archive, AlertTriangle, Settings } from "lucide-react"
+import { Package, ClipboardCheck, FileText, CheckCircle, Archive, AlertTriangle } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface BottomNavigationProps {
@@ -17,6 +17,16 @@ export function BottomNavigation({ activeTab, onTabChange, userRole }: BottomNav
       icon: Package,
     },
     {
+      id: "picked-items",
+      label: "Picked Items",
+      icon: ClipboardCheck,
+    },
+    {
+      id: "order-status",
+      label: "Order Process",
+      icon: FileText,
+    },
+    {
       id: "ready-to-pack",
       label: "Ready to Pack",
       icon: CheckCircle,
@@ -31,15 +41,6 @@ export function BottomNavigation({ activeTab, onTabChange, userRole }: BottomNav
       label: "Out of Stock",
       icon: AlertTriangle,
     },
-    ...((userRole === "admin" || userRole === "superadmin")
-      ? [
-          {
-            id: "admin",
-            label: "Admin",
-            icon: Settings,
-          },
-        ]
-      : []),
   ]
 
   return (

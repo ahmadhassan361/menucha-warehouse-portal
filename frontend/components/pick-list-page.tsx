@@ -17,6 +17,7 @@ interface PickListItem {
   sku: string
   title: string
   category: string
+  subcategory?: string
   vendor_name?: string
   variation_details?: string
   image_url: string
@@ -31,6 +32,7 @@ export function PickListPage() {
   const [syncing, setSyncing] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
   const [selectedCategories, setSelectedCategories] = useState<string[]>([])
+  const [selectedSubcategories, setSelectedSubcategories] = useState<string[]>([])
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null)
   const [pickQuantities, setPickQuantities] = useState<Record<string, number>>({})
   const [notInStockDialogOpen, setNotInStockDialogOpen] = useState(false)
@@ -39,12 +41,43 @@ export function PickListPage() {
   const [previewImage, setPreviewImage] = useState<string | null>(null)
   const [previewTitle, setPreviewTitle] = useState<string>("")
   const [categoryNavExpanded, setCategoryNavExpanded] = useState(false)
+  const [showHeader, setShowHeader] = useState(true)
+  const [lastScrollY, setLastScrollY] = useState(0)
 
   // Load pick list on mount
   useEffect(() => {
     loadPickList()
     loadSyncStatus()
   }, [])
+
+  // Handle scroll to show/hide header
+  useEffect(() => {
+    const handleScroll = () => {
+      const currentScrollY = window.scrollY
+      
+      // Show header when scrolling up, hide when scrolling down
+      if (currentScrollY < lastScrollY) {
+        // Scrolling up
+        setShowHeader(true)
+      } else if (currentScrollY > lastScrollY && currentScrollY > 100) {
+        // Scrolling down and past 100px
+        setShowHeader(false)
+      }
+      
+      // Always show header when at top
+      if (currentScrollY < 10) {
+        setShowHeader(true)
+      }
+      
+      setLastScrollY(currentScrollY)
+    }
+
+    window.addEventListener('scroll', handleScroll, { passive: true })
+    
+    return () => {
+      window.removeEventListener('scroll', handleScroll)
+    }
+  }, [lastScrollY])
 
   const loadPickList = async () => {
     try {
@@ -170,9 +203,33 @@ export function PickListPage() {
     })
   }
 
+  // Toggle subcategory selection
+  const toggleSubcategory = (subcategory: string) => {
+    setSelectedSubcategories(prev => {
+      if (prev.includes(subcategory)) {
+        // Remove subcategory
+        return prev.filter(s => s !== subcategory)
+      } else {
+        // Add subcategory
+        return [...prev, subcategory]
+      }
+    })
+  }
+
   // Clear all category filters
   const clearCategoryFilters = () => {
     setSelectedCategories([])
+  }
+
+  // Clear all subcategory filters
+  const clearSubcategoryFilters = () => {
+    setSelectedSubcategories([])
+  }
+
+  // Clear all filters
+  const clearAllFilters = () => {
+    setSelectedCategories([])
+    setSelectedSubcategories([])
   }
 
   // Get unique categories (excluding 'all')
@@ -181,6 +238,23 @@ export function PickListPage() {
     return cats.filter(c => c).sort()
   }, [items])
 
+  // Get unique subcategories (filtered by selected categories if any)
+  const subcategories = useMemo(() => {
+    let itemsToConsider = items
+    
+    // If categories are selected, only show subcategories from those categories
+    if (selectedCategories.length > 0) {
+      itemsToConsider = items.filter(item => selectedCategories.includes(item.category))
+    }
+    
+    const subs = Array.from(new Set(
+      itemsToConsider
+        .map((item) => item.subcategory || '')
+        .filter(s => s.trim() !== '')
+    ))
+    return subs.sort()
+  }, [items, selectedCategories])
+
   // Filter items
   const filteredItems = useMemo(() => {
     return items.filter((item) => {
@@ -188,10 +262,11 @@ export function PickListPage() {
         item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
         item.sku.toLowerCase().includes(searchTerm.toLowerCase())
       const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(item.category)
+      const matchesSubcategory = selectedSubcategories.length === 0 || selectedSubcategories.includes(item.subcategory || '')
       const hasRemaining = item.remaining > 0
-      return matchesSearch && matchesCategory && hasRemaining
+      return matchesSearch && matchesCategory && matchesSubcategory && hasRemaining
     })
-  }, [items, searchTerm, selectedCategories])
+  }, [items, searchTerm, selectedCategories, selectedSubcategories])
 
   // Group items by category
   const groupedItems = useMemo(() => {
@@ -230,7 +305,11 @@ export function PickListPage() {
 
   return (
     <div className="p-4 space-y-4">
-      <div className="sticky top-0 z-10 bg-background pb-4 space-y-4">
+      <div 
+        className={`sticky top-0 z-10 bg-background pb-4 space-y-4 transition-transform duration-300 ease-in-out ${
+          showHeader ? 'translate-y-0' : '-translate-y-full'
+        }`}
+      >
         <div className="flex items-center justify-between">
           <div>
             <h1 className="text-2xl font-bold text-foreground">Pick List</h1>
@@ -256,25 +335,25 @@ export function PickListPage() {
               className="pl-10"
             />
           </div>
-          {selectedCategories.length > 0 && (
+          {(selectedCategories.length > 0 || selectedSubcategories.length > 0) && (
             <Button 
-              onClick={clearCategoryFilters}
+              onClick={clearAllFilters}
               variant="outline" 
               size="sm"
               className="whitespace-nowrap"
             >
               <X className="h-4 w-4 mr-1" />
-              Clear Filters ({selectedCategories.length})
+              Clear Filters ({selectedCategories.length + selectedSubcategories.length})
             </Button>
           )}
         </div>
 
         {/* Category Filter Chips */}
-        {categories.length > 1 && (
+        {categories.length > 0 && (
           <div className="border-t border-border pt-3">
             <div className="flex items-center justify-between mb-2">
               <p className="text-xs text-muted-foreground font-medium">
-                Filter by Category {selectedCategories.length > 0 && `(${selectedCategories.length} selected)`}:
+                Categories {selectedCategories.length > 0 && `(${selectedCategories.length} selected)`}:
               </p>
               {/* Collapse/Expand button for mobile only */}
               <button
@@ -369,6 +448,119 @@ export function PickListPage() {
             </div>
           </div>
         )}
+
+        {/* Subcategory Filter Chips */}
+        {subcategories.length > 0 && (
+          <div className="border-t border-border pt-3">
+            <div className="flex items-center justify-between mb-2">
+              <p className="text-xs text-muted-foreground font-medium">
+                Subcategories {selectedSubcategories.length > 0 && `(${selectedSubcategories.length} selected)`}:
+              </p>
+              {/* Collapse/Expand button for mobile only */}
+              <button
+                onClick={() => setCategoryNavExpanded(!categoryNavExpanded)}
+                className="md:hidden text-xs text-primary flex items-center gap-1 hover:underline"
+              >
+                {categoryNavExpanded ? (
+                  <>
+                    <span>Collapse</span>
+                    <ChevronUp className="h-3 w-3" />
+                  </>
+                ) : (
+                  <>
+                    <span>Expand</span>
+                    <ChevronDown className="h-3 w-3" />
+                  </>
+                )}
+              </button>
+            </div>
+            
+            {/* Desktop: Normal flex-wrap */}
+            <div className="hidden md:flex flex-wrap gap-2">
+              {subcategories.map((subcategory) => {
+                const isSelected = selectedSubcategories.includes(subcategory)
+                const subcategoryItemCount = items.filter(item => 
+                  (item.subcategory || '') === subcategory && 
+                  item.remaining > 0 &&
+                  (selectedCategories.length === 0 || selectedCategories.includes(item.category))
+                ).length
+                return (
+                  <Badge
+                    key={subcategory}
+                    variant={isSelected ? "default" : "outline"}
+                    className={`cursor-pointer transition-colors ${
+                      isSelected 
+                        ? "bg-primary text-primary-foreground hover:bg-primary/90" 
+                        : "hover:bg-primary hover:text-primary-foreground"
+                    }`}
+                    onClick={() => toggleSubcategory(subcategory)}
+                  >
+                    {subcategory} ({subcategoryItemCount})
+                  </Badge>
+                )
+              })}
+            </div>
+
+            {/* Mobile: Collapseable with horizontal scroll or wrapped */}
+            <div className="md:hidden">
+              {categoryNavExpanded ? (
+                /* Expanded: Show all with wrap */
+                <div className="flex flex-wrap gap-2">
+                  {subcategories.map((subcategory) => {
+                    const isSelected = selectedSubcategories.includes(subcategory)
+                    const subcategoryItemCount = items.filter(item => 
+                      (item.subcategory || '') === subcategory && 
+                      item.remaining > 0 &&
+                      (selectedCategories.length === 0 || selectedCategories.includes(item.category))
+                    ).length
+                    return (
+                      <Badge
+                        key={subcategory}
+                        variant={isSelected ? "default" : "outline"}
+                        className={`cursor-pointer transition-colors text-xs ${
+                          isSelected 
+                            ? "bg-primary text-primary-foreground hover:bg-primary/90" 
+                            : "hover:bg-primary hover:text-primary-foreground"
+                        }`}
+                        onClick={() => toggleSubcategory(subcategory)}
+                      >
+                        {subcategory} ({subcategoryItemCount})
+                      </Badge>
+                    )
+                  })}
+                </div>
+              ) : (
+                /* Collapsed: Horizontal scroll */
+                <div className="overflow-x-auto pb-2 -mx-1 px-1">
+                  <div className="flex gap-2 min-w-max">
+                    {subcategories.map((subcategory) => {
+                      const isSelected = selectedSubcategories.includes(subcategory)
+                      const subcategoryItemCount = items.filter(item => 
+                        (item.subcategory || '') === subcategory && 
+                        item.remaining > 0 &&
+                        (selectedCategories.length === 0 || selectedCategories.includes(item.category))
+                      ).length
+                      return (
+                        <Badge
+                          key={subcategory}
+                          variant={isSelected ? "default" : "outline"}
+                          className={`cursor-pointer transition-colors whitespace-nowrap text-xs flex-shrink-0 ${
+                            isSelected 
+                              ? "bg-primary text-primary-foreground hover:bg-primary/90" 
+                              : "hover:bg-primary hover:text-primary-foreground"
+                          }`}
+                          onClick={() => toggleSubcategory(subcategory)}
+                        >
+                          {subcategory} ({subcategoryItemCount})
+                        </Badge>
+                      )
+                    })}
+                  </div>
+                </div>
+              )}
+            </div>
+          </div>
+        )}
       </div>
 
       <div className="space-y-6">
@@ -405,7 +597,9 @@ export function PickListPage() {
                           {item.variation_details && (
                             <p className="text-xs text-muted-foreground italic">{item.variation_details}</p>
                           )}
-                          <p className="text-xs text-muted-foreground">{item.category}</p>
+                          <p className="text-xs text-muted-foreground">
+                            {item.category}{item.subcategory ? ` > ${item.subcategory}` : ''}
+                          </p>
 
                           <div className="flex items-center gap-4 mt-3">
                             <div className="text-center">
@@ -518,6 +712,9 @@ export function PickListPage() {
                           {item.variation_details && (
                             <p className="text-xs text-muted-foreground italic">{item.variation_details}</p>
                           )}
+                          <p className="text-xs text-muted-foreground">
+                            {item.category}{item.subcategory ? ` > ${item.subcategory}` : ''}
+                          </p>
                         </div>
 
                         {/* Stats */}
@@ -621,13 +818,13 @@ export function PickListPage() {
         {filteredItems.length === 0 && (
           <div className="text-center py-12">
             <div className="text-muted-foreground">
-              {items.length === 0 ? (
+                  {items.length === 0 ? (
                 <>
                   <p>No items in pick list</p>
                   <p className="text-sm mt-2">Click "Sync Now" to import orders from the API</p>
                 </>
               ) : (
-                searchTerm || selectedCategories.length > 0
+                searchTerm || selectedCategories.length > 0 || selectedSubcategories.length > 0
                   ? "No items match your search criteria"
                   : "All items have been picked!"
               )}

@@ -15,7 +15,11 @@ import {
 import { authService } from "@/services/auth.service"
 import { toast } from "sonner"
 
-export function AppHeader() {
+interface AppHeaderProps {
+  onAdminClick?: () => void
+}
+
+export function AppHeader({ onAdminClick }: AppHeaderProps) {
   const router = useRouter()
   const [user, setUser] = useState<any>(null)
 
@@ -37,7 +41,17 @@ export function AppHeader() {
     }
   }
 
+  const handleUsernameClick = () => {
+    // Allow all users to access admin page (staff can change password)
+    if (onAdminClick && user) {
+      onAdminClick()
+    }
+  }
+
   if (!user) return null
+
+  // All users can access admin page now (staff will only see Change Password section)
+  const canAccessAdmin = true
 
   return (
     <header className=" top-0 z-50 w-full border-b bg-background/95 backdrop-blur supports-[backdrop-filter]:bg-background/60">
@@ -47,9 +61,15 @@ export function AppHeader() {
         </div>
 
         <div className="flex items-center gap-3">
-          <div className="flex flex-col items-end">
+          <div 
+            className={`flex flex-col items-end ${canAccessAdmin ? 'cursor-pointer hover:opacity-80 transition-opacity' : ''}`}
+            onClick={handleUsernameClick}
+          >
             <span className="text-sm font-medium">{user.username}</span>
-            <span className="text-xs text-muted-foreground capitalize">{user.role}</span>
+            <span className="text-xs text-muted-foreground capitalize">
+              {user.role}
+              {' • Click for Settings'}
+            </span>
           </div>
           <Button 
             onClick={handleLogout} 

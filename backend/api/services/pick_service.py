@@ -18,11 +18,14 @@ class PickService:
         """
         Get aggregated pick list grouped by SKU
         Returns list of items with needed, picked, and remaining quantities
+        Only shows items for current shipment batch
         """
         # Get all order items from open orders (not ready to pack)
+        # Only items in current shipment batch
         order_items = OrderItem.objects.filter(
             order__status__in=['open', 'picking'],
-            order__ready_to_pack=False
+            order__ready_to_pack=False,
+            shipment_batch=F('order__current_shipment')
         ).select_related('product')
         
         # Group by SKU and aggregate
@@ -80,6 +83,7 @@ class PickService:
     def pick_items(sku: str, qty: int, user, notes: str = '') -> Tuple[bool, str, List[int]]:
         """
         Pick items for a given SKU with FIFO allocation
+        Only picks items for current shipment batch
         
         Args:
             sku: The SKU to pick
@@ -94,10 +98,12 @@ class PickService:
             return False, "Quantity must be greater than 0", []
         
         # Get all outstanding order items for this SKU, ordered by FIFO (oldest first)
+        # Only items in current shipment batch
         order_items = OrderItem.objects.filter(
             sku=sku,
             order__status__in=['open', 'picking'],
-            order__ready_to_pack=False
+            order__ready_to_pack=False,
+            shipment_batch=F('order__current_shipment')
         ).select_related('order').order_by('order__created_at', 'id')
         
         # Filter to only items with remaining quantity
@@ -175,20 +181,23 @@ class PickService:
         """
         Get all outstanding order items for a specific SKU
         Ordered by FIFO (oldest orders first)
+        Only items in current shipment batch
         """
         return OrderItem.objects.filter(
             sku=sku,
             order__status__in=['open', 'picking'],
-            order__ready_to_pack=False
+            order__ready_to_pack=False,
+            shipment_batch=F('order__current_shipment')
         ).select_related('order').order_by('order__created_at', 'id')
     
     @staticmethod
     def get_pickable_quantity(sku: str) -> int:
-        """Get total pickable (remaining) quantity for a SKU"""
+        """Get total pickable (remaining) quantity for a SKU in current shipment batches"""
         order_items = OrderItem.objects.filter(
             sku=sku,
             order__status__in=['open', 'picking'],
-            order__ready_to_pack=False
+            order__ready_to_pack=False,
+            shipment_batch=F('order__current_shipment')
         )
         
         total = 0
