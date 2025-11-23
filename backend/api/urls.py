@@ -27,6 +27,7 @@ urlpatterns = [
     path('picklist/stats', views.pick_list_stats_view, name='picklist-stats'),
     path('picklist/<str:sku>/orders', views.get_orders_for_sku_view, name='get-orders-for-sku'),
     path('picked-items', views.picked_items_view, name='picked-items'),
+    path('picked-items/<int:item_id>/revert', views.revert_picked_item_view, name='revert-picked-item'),
     path('pick', views.pick_action_view, name='pick'),
     path('not-in-stock', views.not_in_stock_action_view, name='not-in-stock'),
     

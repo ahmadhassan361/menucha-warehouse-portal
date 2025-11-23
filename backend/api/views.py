@@ -747,6 +747,94 @@ def revert_to_picking_view(request, order_id):
         )
 
 
+@extend_schema(
+    request={
+        'application/json': {
+            'type': 'object',
+            'properties': {
+                'qty': {'type': 'integer', 'description': 'Quantity to revert (optional, defaults to all picked)'},
+            }
+        }
+    },
+    responses={200: {'message': 'string'}}
+)
+@api_view(['POST'])
+@permission_classes([IsAdminOrPicker])
+def revert_picked_item_view(request, item_id):
+    """
+    Revert picked item back to pick list (undo pick action)
+    Can revert all or partial quantity
+    """
+    try:
+        item = OrderItem.objects.select_related('order').get(id=item_id)
+        
+        # Check if item has been picked
+        if item.qty_picked == 0:
+            return Response(
+                {'error': 'Item has no picked quantity to revert'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if order is already packed
+        if item.order.status == 'packed':
+            return Response(
+                {'error': 'Cannot revert items from packed orders'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Check if order is ready to pack
+        if item.order.ready_to_pack:
+            return Response(
+                {'error': 'Cannot revert items from orders that are ready to pack. Please revert the order first.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Get quantity to revert (default to all picked)
+        qty_to_revert = request.data.get('qty', item.qty_picked)
+        
+        if qty_to_revert <= 0:
+            return Response(
+                {'error': 'Quantity must be greater than 0'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        if qty_to_revert > item.qty_picked:
+            return Response(
+                {'error': f'Cannot revert {qty_to_revert} items. Only {item.qty_picked} have been picked.'},
+                status=status.HTTP_400_BAD_REQUEST
+            )
+        
+        # Revert the quantity
+        item.qty_picked -= qty_to_revert
+        item.save(update_fields=['qty_picked', 'updated_at'])
+        
+        # Delete or update pick events (for audit trail, we might want to keep them but mark as reverted)
+        # For now, we'll keep the pick events as-is for audit purposes
+        
+        logger.info(
+            f"Reverted {qty_to_revert}x {item.sku} from order {item.order.number} "
+            f"by {request.user.username}"
+        )
+        
+        message = f'Reverted {qty_to_revert}x {item.sku} back to pick list'
+        if item.qty_picked > 0:
+            message += f' ({item.qty_picked} still picked)'
+        
+        return Response({
+            'message': message,
+            'item_id': item.id,
+            'sku': item.sku,
+            'qty_picked': item.qty_picked,
+            'qty_remaining': item.qty_remaining
+        })
+        
+    except OrderItem.DoesNotExist:
+        return Response(
+            {'error': 'Item not found'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+
 @api_view(['POST'])
 @permission_classes([IsAdminOrSuperadmin])
 def change_order_state_view(request, order_id):

@@ -35,4 +35,9 @@ export const pickedItemsService = {
     const response = await api.get('/picked-items', { params });
     return response.data;
   },
+
+  async revertPickedItem(itemId: number, qty?: number): Promise<{ message: string }> {
+    const response = await api.post(`/picked-items/${itemId}/revert`, qty ? { qty } : {});
+    return response.data;
+  },
 };

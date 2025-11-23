@@ -1,7 +1,7 @@
 "use client"
 
 import { useState, useEffect, useMemo } from "react"
-import { Search, Filter, SortAsc, SortDesc, Package, User, Clock, Loader2, X, ChevronDown, ChevronUp } from "lucide-react"
+import { Search, Filter, SortAsc, SortDesc, Package, User, Clock, Loader2, X, ChevronDown, ChevronUp, Undo2 } from "lucide-react"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
 import { Card, CardContent } from "@/components/ui/card"
@@ -67,6 +67,21 @@ export function PickedItemsPage() {
       toast.error('Failed to load picked items: ' + (error.response?.data?.message || error.message))
     } finally {
       setLoading(false)
+    }
+  }
+
+  const handleRevertItem = async (item: PickedItem) => {
+    if (!confirm(`Revert ${item.qty_picked}x ${item.sku} back to pick list?`)) {
+      return
+    }
+
+    try {
+      const result = await pickedItemsService.revertPickedItem(item.id)
+      toast.success(result.message)
+      await loadPickedItems()
+    } catch (error: any) {
+      console.error('Failed to revert item:', error)
+      toast.error('Failed to revert: ' + (error.response?.data?.error || error.message))
     }
   }
 
@@ -350,6 +365,15 @@ export function PickedItemsPage() {
                       {item.qty_short} short
                     </Badge>
                   )}
+                  <Button
+                    onClick={() => handleRevertItem(item)}
+                    variant="outline"
+                    size="sm"
+                    className="mt-2 text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                  >
+                    <Undo2 className="h-3 w-3 mr-1" />
+                    Revert
+                  </Button>
                 </div>
               </div>
 
@@ -425,6 +449,16 @@ export function PickedItemsPage() {
                     {item.qty_short} marked as short
                   </Badge>
                 )}
+
+                <Button
+                  onClick={() => handleRevertItem(item)}
+                  variant="outline"
+                  size="sm"
+                  className="w-full text-orange-600 hover:text-orange-700 hover:bg-orange-50"
+                >
+                  <Undo2 className="h-4 w-4 mr-2" />
+                  Revert to Pick List
+                </Button>
               </div>
             </CardContent>
           </Card>
