@@ -355,10 +355,10 @@ export function PickListPage() {
               <p className="text-xs text-muted-foreground font-medium">
                 Categories {selectedCategories.length > 0 && `(${selectedCategories.length} selected)`}:
               </p>
-              {/* Collapse/Expand button for mobile only */}
+              {/* Collapse/Expand button for all screen sizes */}
               <button
                 onClick={() => setCategoryNavExpanded(!categoryNavExpanded)}
-                className="md:hidden text-xs text-primary flex items-center gap-1 hover:underline"
+                className="text-xs text-primary flex items-center gap-1 hover:underline"
               >
                 {categoryNavExpanded ? (
                   <>
@@ -374,30 +374,8 @@ export function PickListPage() {
               </button>
             </div>
             
-            {/* Desktop: Normal flex-wrap */}
-            <div className="hidden md:flex flex-wrap gap-2">
-              {categories.map((category) => {
-                const isSelected = selectedCategories.includes(category)
-                const categoryItemCount = items.filter(item => item.category === category && item.remaining > 0).length
-                return (
-                  <Badge
-                    key={category}
-                    variant={isSelected ? "default" : "outline"}
-                    className={`cursor-pointer transition-colors ${
-                      isSelected 
-                        ? "bg-primary text-primary-foreground hover:bg-primary/90" 
-                        : "hover:bg-primary hover:text-primary-foreground"
-                    }`}
-                    onClick={() => toggleCategory(category)}
-                  >
-                    {category} ({categoryItemCount})
-                  </Badge>
-                )
-              })}
-            </div>
-
-            {/* Mobile: Collapseable with horizontal scroll or wrapped */}
-            <div className="md:hidden">
+            {/* All screen sizes: Collapseable with horizontal scroll or wrapped */}
+            <div>
               {categoryNavExpanded ? (
                 /* Expanded: Show all with wrap */
                 <div className="flex flex-wrap gap-2">
@@ -408,7 +386,7 @@ export function PickListPage() {
                       <Badge
                         key={category}
                         variant={isSelected ? "default" : "outline"}
-                        className={`cursor-pointer transition-colors text-xs ${
+                        className={`cursor-pointer transition-colors ${
                           isSelected 
                             ? "bg-primary text-primary-foreground hover:bg-primary/90" 
                             : "hover:bg-primary hover:text-primary-foreground"
@@ -431,7 +409,7 @@ export function PickListPage() {
                         <Badge
                           key={category}
                           variant={isSelected ? "default" : "outline"}
-                          className={`cursor-pointer transition-colors whitespace-nowrap text-xs flex-shrink-0 ${
+                          className={`cursor-pointer transition-colors whitespace-nowrap flex-shrink-0 ${
                             isSelected 
                               ? "bg-primary text-primary-foreground hover:bg-primary/90" 
                               : "hover:bg-primary hover:text-primary-foreground"
@@ -456,10 +434,10 @@ export function PickListPage() {
               <p className="text-xs text-muted-foreground font-medium">
                 Subcategories {selectedSubcategories.length > 0 && `(${selectedSubcategories.length} selected)`}:
               </p>
-              {/* Collapse/Expand button for mobile only */}
+              {/* Collapse/Expand button for all screen sizes */}
               <button
                 onClick={() => setCategoryNavExpanded(!categoryNavExpanded)}
-                className="md:hidden text-xs text-primary flex items-center gap-1 hover:underline"
+                className="text-xs text-primary flex items-center gap-1 hover:underline"
               >
                 {categoryNavExpanded ? (
                   <>
@@ -475,34 +453,8 @@ export function PickListPage() {
               </button>
             </div>
             
-            {/* Desktop: Normal flex-wrap */}
-            <div className="hidden md:flex flex-wrap gap-2">
-              {subcategories.map((subcategory) => {
-                const isSelected = selectedSubcategories.includes(subcategory)
-                const subcategoryItemCount = items.filter(item => 
-                  (item.subcategory || '') === subcategory && 
-                  item.remaining > 0 &&
-                  (selectedCategories.length === 0 || selectedCategories.includes(item.category))
-                ).length
-                return (
-                  <Badge
-                    key={subcategory}
-                    variant={isSelected ? "default" : "outline"}
-                    className={`cursor-pointer transition-colors ${
-                      isSelected 
-                        ? "bg-primary text-primary-foreground hover:bg-primary/90" 
-                        : "hover:bg-primary hover:text-primary-foreground"
-                    }`}
-                    onClick={() => toggleSubcategory(subcategory)}
-                  >
-                    {subcategory} ({subcategoryItemCount})
-                  </Badge>
-                )
-              })}
-            </div>
-
-            {/* Mobile: Collapseable with horizontal scroll or wrapped */}
-            <div className="md:hidden">
+            {/* All screen sizes: Collapseable with horizontal scroll or wrapped */}
+            <div>
               {categoryNavExpanded ? (
                 /* Expanded: Show all with wrap */
                 <div className="flex flex-wrap gap-2">
@@ -517,7 +469,7 @@ export function PickListPage() {
                       <Badge
                         key={subcategory}
                         variant={isSelected ? "default" : "outline"}
-                        className={`cursor-pointer transition-colors text-xs ${
+                        className={`cursor-pointer transition-colors ${
                           isSelected 
                             ? "bg-primary text-primary-foreground hover:bg-primary/90" 
                             : "hover:bg-primary hover:text-primary-foreground"
@@ -544,7 +496,7 @@ export function PickListPage() {
                         <Badge
                           key={subcategory}
                           variant={isSelected ? "default" : "outline"}
-                          className={`cursor-pointer transition-colors whitespace-nowrap text-xs flex-shrink-0 ${
+                          className={`cursor-pointer transition-colors whitespace-nowrap flex-shrink-0 ${
                             isSelected 
                               ? "bg-primary text-primary-foreground hover:bg-primary/90" 
                               : "hover:bg-primary hover:text-primary-foreground"
