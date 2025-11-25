@@ -245,6 +245,7 @@ class PickListItemSerializer(serializers.Serializer):
     vendor_name = serializers.CharField(allow_blank=True)
     variation_details = serializers.CharField(allow_blank=True)
     image_url = serializers.URLField(allow_null=True)
+    price = serializers.DecimalField(max_digits=10, decimal_places=2, allow_null=True)
     needed = serializers.IntegerField()
     picked = serializers.IntegerField()
     remaining = serializers.IntegerField()

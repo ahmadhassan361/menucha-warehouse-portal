@@ -32,6 +32,11 @@ export function PickedItemsPage() {
     return () => clearInterval(interval)
   }, [])
 
+  // Reload data when sorting changes
+  useEffect(() => {
+    loadPickedItems()
+  }, [sortBy, sortOrder])
+
   // Handle scroll to show/hide header
   useEffect(() => {
     const handleScroll = () => {

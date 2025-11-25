@@ -22,7 +22,7 @@ export const pickListService = {
   },
 
   async getOrdersForSku(sku: string) {
-    const response = await api.get(`/picklist/${sku}/orders`);
+    const response = await api.get(`/picklist/${encodeURIComponent(sku)}/orders`);
     return response.data;
   },
 };

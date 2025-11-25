@@ -20,6 +20,7 @@ export function OrderStatusPage() {
   const [loading, setLoading] = useState(true)
   const [searchTerm, setSearchTerm] = useState("")
   const [statusFilter, setStatusFilter] = useState<'in_progress' | 'all' | 'open' | 'picking' | 'ready_to_pack' | 'packed'>('in_progress')
+  const [emailFilter, setEmailFilter] = useState<'all' | 'sent' | 'unsent'>('all')
   const [sortBy, setSortBy] = useState<'newest' | 'oldest' | 'progress_high' | 'progress_low'>('newest')
   const [expandedOrders, setExpandedOrders] = useState<Set<number>>(new Set())
   const [editingMessages, setEditingMessages] = useState<Record<number, string>>({})
@@ -274,6 +275,17 @@ export function OrderStatusPage() {
           </SelectContent>
         </Select>
 
+        <Select value={emailFilter} onValueChange={(v: any) => setEmailFilter(v)}>
+          <SelectTrigger className="w-[160px]">
+            <SelectValue />
+          </SelectTrigger>
+          <SelectContent>
+            <SelectItem value="all">All Emails</SelectItem>
+            <SelectItem value="sent">Email Sent</SelectItem>
+            <SelectItem value="unsent">Email Unsent</SelectItem>
+          </SelectContent>
+        </Select>
+
         <Select value={sortBy} onValueChange={(v: any) => setSortBy(v)}>
           <SelectTrigger className="w-[180px]">
             <SelectValue />
@@ -293,7 +305,22 @@ export function OrderStatusPage() {
       </div>
 
       <div className="space-y-4">
-        {orders.map(order => {
+        {orders.filter(order => {
+          // Apply email filter only for non-packed orders
+          if (emailFilter === 'all' || order.status === 'packed') {
+            return true
+          }
+          
+          if (emailFilter === 'sent') {
+            return order.email_sent === true
+          }
+          
+          if (emailFilter === 'unsent') {
+            return order.email_sent === false
+          }
+          
+          return true
+        }).map(order => {
           const isExpanded = expandedOrders.has(order.id)
           const currentMessage = editingMessages[order.id] ?? order.customer_message
           const isSaving = savingOrders.has(order.id)

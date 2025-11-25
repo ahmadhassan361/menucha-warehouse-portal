@@ -1,8 +1,9 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { Download, Mail, MessageSquare, Calendar, AlertTriangle, Package, Loader2, CheckCircle, X } from "lucide-react"
+import { Download, Mail, MessageSquare, Calendar, AlertTriangle, Package, Loader2, CheckCircle, X, Search, SortAsc, SortDesc } from "lucide-react"
 import { Button } from "@/components/ui/button"
+import { Input } from "@/components/ui/input"
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card"
 import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
@@ -40,6 +41,10 @@ export function OutOfStockPage() {
   const [loading, setLoading] = useState(true)
   const [selectedDateRange, setSelectedDateRange] = useState("last7days")
   const [selectedFilter, setSelectedFilter] = useState("all")
+  const [minDaysOld, setMinDaysOld] = useState<string>("0")
+  const [searchTerm, setSearchTerm] = useState("")
+  const [sortBy, setSortBy] = useState<'timestamp' | 'sku' | 'qty_short' | 'vendor'>('timestamp')
+  const [sortOrder, setSortOrder] = useState<'asc' | 'desc'>('desc')
   const [exporting, setExporting] = useState(false)
   const [previewImage, setPreviewImage] = useState<string | null>(null)
   const [previewTitle, setPreviewTitle] = useState<string>("")
@@ -61,13 +66,14 @@ export function OutOfStockPage() {
     }
   }
 
-  // Filter shortages based on date range and status
+  // Filter, search, and sort shortages
   const filteredShortages = useMemo(() => {
     const now = new Date()
     const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
     const startOfYesterday = new Date(startOfToday.getTime() - 24 * 60 * 60 * 1000)
 
-    return shortages.filter((shortage) => {
+    // Filter by date and status
+    let filtered = shortages.filter((shortage) => {
       const shortageDate = new Date(shortage.timestamp)
       
       // Date filter
@@ -106,10 +112,58 @@ export function OutOfStockPage() {
         default:
           statusMatch = true
       }
+
+      // Minimum days old filter
+      let minDaysMatch = true
+      const minDays = parseInt(minDaysOld)
+      if (minDays > 0) {
+        const daysOld = Math.floor((now.getTime() - shortageDate.getTime()) / (1000 * 60 * 60 * 24))
+        minDaysMatch = daysOld >= minDays
+      }
       
-      return dateMatch && statusMatch
+      return dateMatch && statusMatch && minDaysMatch
     })
-  }, [shortages, selectedDateRange, selectedFilter])
+
+    // Search filter
+    if (searchTerm) {
+      const searchLower = searchTerm.toLowerCase()
+      filtered = filtered.filter((shortage) => {
+        const vendorMatch = shortage.vendor_name?.toLowerCase().includes(searchLower) || false
+        const skuMatch = shortage.sku.toLowerCase().includes(searchLower)
+        const titleMatch = shortage.product_title.toLowerCase().includes(searchLower)
+        const orderMatch = shortage.order_numbers.some(order => order.toLowerCase().includes(searchLower))
+        
+        return vendorMatch || skuMatch || titleMatch || orderMatch
+      })
+    }
+
+    // Sort
+    const sorted = [...filtered].sort((a, b) => {
+      let compareValue = 0
+      
+      switch (sortBy) {
+        case 'sku':
+          compareValue = a.sku.localeCompare(b.sku)
+          break
+        case 'qty_short':
+          compareValue = a.qty_short - b.qty_short
+          break
+        case 'vendor':
+          const vendorA = a.vendor_name || ''
+          const vendorB = b.vendor_name || ''
+          compareValue = vendorA.localeCompare(vendorB)
+          break
+        case 'timestamp':
+        default:
+          compareValue = new Date(a.timestamp).getTime() - new Date(b.timestamp).getTime()
+          break
+      }
+      
+      return sortOrder === 'asc' ? compareValue : -compareValue
+    })
+
+    return sorted
+  }, [shortages, selectedDateRange, selectedFilter, minDaysOld, searchTerm, sortBy, sortOrder])
 
   const totalShortageQuantity = filteredShortages.reduce((sum, shortage) => sum + shortage.qty_short, 0)
   const totalAffectedOrders = new Set(filteredShortages.flatMap((shortage) => shortage.order_numbers)).size
@@ -232,7 +286,48 @@ export function OutOfStockPage() {
             </div>
           </div>
 
-          <div className="flex flex-col sm:flex-row gap-2">
+          {/* Search and Sort Controls */}
+          <div className="flex gap-3 flex-wrap">
+            <div className="flex-1 min-w-[200px] relative">
+              <Search className="absolute left-3 top-1/2 transform -translate-y-1/2 h-4 w-4 text-muted-foreground" />
+              <Input
+                placeholder="Search by vendor, SKU, product name, or order #..."
+                value={searchTerm}
+                onChange={(e) => setSearchTerm(e.target.value)}
+                className="pl-10"
+              />
+            </div>
+
+            <Select value={sortBy} onValueChange={(v: any) => setSortBy(v)}>
+              <SelectTrigger className="w-[180px]">
+                <SelectValue />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="timestamp">Sort by Time</SelectItem>
+                <SelectItem value="sku">Sort by SKU</SelectItem>
+                <SelectItem value="qty_short">Sort by Quantity</SelectItem>
+                <SelectItem value="vendor">Sort by Vendor</SelectItem>
+              </SelectContent>
+            </Select>
+
+            <Button onClick={() => setSortOrder(prev => prev === 'asc' ? 'desc' : 'asc')} variant="outline" size="icon">
+              {sortOrder === 'asc' ? <SortAsc className="h-4 w-4" /> : <SortDesc className="h-4 w-4" />}
+            </Button>
+
+            {searchTerm && (
+              <Button 
+                onClick={() => setSearchTerm("")}
+                variant="outline" 
+                size="sm"
+              >
+                <X className="h-4 w-4 mr-1" />
+                Clear Search
+              </Button>
+            )}
+          </div>
+
+          {/* Status and Date Filters */}
+          <div className="flex flex-col sm:flex-row gap-2 flex-wrap">
             <Select value={selectedFilter} onValueChange={setSelectedFilter}>
               <SelectTrigger className="w-full sm:w-44">
                 <SelectValue placeholder="Filter by status" />
@@ -256,6 +351,22 @@ export function OutOfStockPage() {
                     {option.label}
                   </SelectItem>
                 ))}
+              </SelectContent>
+            </Select>
+
+            <Select value={minDaysOld} onValueChange={setMinDaysOld}>
+              <SelectTrigger className="w-full sm:w-52">
+                <SelectValue placeholder="Min days old" />
+              </SelectTrigger>
+              <SelectContent>
+                <SelectItem value="0">All (No min days)</SelectItem>
+                <SelectItem value="1">1+ days old</SelectItem>
+                <SelectItem value="2">2+ days old</SelectItem>
+                <SelectItem value="3">3+ days old</SelectItem>
+                <SelectItem value="5">5+ days old</SelectItem>
+                <SelectItem value="7">7+ days old</SelectItem>
+                <SelectItem value="14">14+ days old</SelectItem>
+                <SelectItem value="30">30+ days old</SelectItem>
               </SelectContent>
             </Select>
           </div>

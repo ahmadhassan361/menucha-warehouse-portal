@@ -24,6 +24,7 @@ interface PickListItem {
   needed: number
   picked: number
   remaining: number
+  price?: number
 }
 
 export function PickListPage() {
@@ -31,8 +32,22 @@ export function PickListPage() {
   const [loading, setLoading] = useState(true)
   const [syncing, setSyncing] = useState(false)
   const [searchTerm, setSearchTerm] = useState("")
-  const [selectedCategories, setSelectedCategories] = useState<string[]>([])
-  const [selectedSubcategories, setSelectedSubcategories] = useState<string[]>([])
+  const [selectedCategories, setSelectedCategories] = useState<string[]>(() => {
+    // Load saved categories from localStorage
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('picklist_selected_categories')
+      return saved ? JSON.parse(saved) : []
+    }
+    return []
+  })
+  const [selectedSubcategories, setSelectedSubcategories] = useState<string[]>(() => {
+    // Load saved subcategories from localStorage
+    if (typeof window !== 'undefined') {
+      const saved = localStorage.getItem('picklist_selected_subcategories')
+      return saved ? JSON.parse(saved) : []
+    }
+    return []
+  })
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null)
   const [pickQuantities, setPickQuantities] = useState<Record<string, number>>({})
   const [notInStockDialogOpen, setNotInStockDialogOpen] = useState(false)
@@ -43,6 +58,20 @@ export function PickListPage() {
   const [categoryNavExpanded, setCategoryNavExpanded] = useState(false)
   const [showHeader, setShowHeader] = useState(true)
   const [lastScrollY, setLastScrollY] = useState(0)
+
+  // Save selected categories to localStorage whenever they change
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('picklist_selected_categories', JSON.stringify(selectedCategories))
+    }
+  }, [selectedCategories])
+
+  // Save selected subcategories to localStorage whenever they change
+  useEffect(() => {
+    if (typeof window !== 'undefined') {
+      localStorage.setItem('picklist_selected_subcategories', JSON.stringify(selectedSubcategories))
+    }
+  }, [selectedSubcategories])
 
   // Load pick list on mount
   useEffect(() => {
@@ -120,6 +149,13 @@ export function PickListPage() {
   }
 
   const handlePickOne = async (sku: string) => {
+
+    const confirmed = confirm(`Are you sure you want to pick ${1} item(s) for SKU: ${sku}?`)
+      
+      if (!confirmed) {
+        return
+      }
+
     // Optimistic update - update UI immediately without reload
     setItems((prev) =>
       prev.map((item) =>
@@ -149,6 +185,13 @@ export function PickListPage() {
   const handlePickQuantity = async (sku: string) => {
     const quantity = pickQuantities[sku] || 0
     if (quantity > 0) {
+      // Show browser confirmation dialog
+      const confirmed = confirm(`Are you sure you want to pick ${quantity} item(s) for SKU: ${sku}?`)
+      
+      if (!confirmed) {
+        return
+      }
+      
       // Optimistic update
       setItems((prev) =>
         prev.map((item) =>
@@ -283,6 +326,11 @@ export function PickListPage() {
   const formatTime = (date: Date | null) => {
     if (!date) return 'Never'
     return date.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })
+  }
+
+  const formatPrice = (price: number | undefined) => {
+    if (!price || price === 0) return 'N/A'
+    return `$${price.toFixed(2)}`
   }
 
   if (loading) {
@@ -552,6 +600,9 @@ export function PickListPage() {
                           <p className="text-xs text-muted-foreground">
                             {item.category}{item.subcategory ? ` > ${item.subcategory}` : ''}
                           </p>
+                          <p className="text-sm font-semibold text-green-600 mt-1">
+                            Price: {formatPrice(item.price)}
+                          </p>
 
                           <div className="flex items-center gap-4 mt-3">
                             <div className="text-center">
@@ -666,6 +717,9 @@ export function PickListPage() {
                           )}
                           <p className="text-xs text-muted-foreground">
                             {item.category}{item.subcategory ? ` > ${item.subcategory}` : ''}
+                          </p>
+                          <p className="text-base font-semibold text-green-600 mt-2">
+                            Price: {formatPrice(item.price)}
                           </p>
                         </div>
 

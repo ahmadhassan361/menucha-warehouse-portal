@@ -43,6 +43,7 @@ class PickService:
                     'vendor_name': item.product.vendor_name if item.product else '',
                     'variation_details': item.product.variation_details if item.product else '',
                     'image_url': item.image_url,
+                    'price': item.product.price if item.product else None,
                     'needed': 0,
                     'picked': 0,
                     'remaining': 0,
