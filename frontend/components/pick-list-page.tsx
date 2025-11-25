@@ -149,13 +149,11 @@ export function PickListPage() {
   }
 
   const handlePickOne = async (sku: string) => {
-
     const confirmed = confirm(`Are you sure you want to pick ${1} item(s) for SKU: ${sku}?`)
       
       if (!confirmed) {
         return
       }
-
     // Optimistic update - update UI immediately without reload
     setItems((prev) =>
       prev.map((item) =>
@@ -330,7 +328,9 @@ export function PickListPage() {
 
   const formatPrice = (price: number | undefined) => {
     if (!price || price === 0) return 'N/A'
-    return `$${price.toFixed(2)}`
+    const numPrice = typeof price === 'string' ? parseFloat(price) : price
+    if (isNaN(numPrice)) return 'N/A'
+    return `$${numPrice.toFixed(2)}`
   }
 
   if (loading) {
