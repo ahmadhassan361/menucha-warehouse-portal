@@ -482,16 +482,61 @@ def stock_exceptions_list_view(request):
 @api_view(['GET'])
 @permission_classes([IsAuthenticated])
 def stock_exceptions_export_view(request):
-    """Export stock exceptions to CSV"""
-    resolved = request.query_params.get('resolved')
-    if resolved is not None:
-        resolved = resolved.lower() == 'true'
-        exceptions = StockException.objects.filter(resolved=resolved).order_by('-timestamp')
-    else:
-        exceptions = StockException.objects.all().order_by('-timestamp')
-    
+    """Export stock exceptions to CSV, respecting active filters from the UI"""
+    # Always export unresolved exceptions only
+    exceptions = StockException.objects.filter(resolved=False).order_by('-timestamp')
+
+    # --- Date range filter ---
+    from_date = request.query_params.get('from_date')
+    to_date = request.query_params.get('to_date')
+
+    if from_date:
+        try:
+            from_date_obj = datetime.strptime(from_date, '%Y-%m-%d')
+            exceptions = exceptions.filter(timestamp__gte=from_date_obj)
+        except ValueError:
+            pass
+
+    if to_date:
+        try:
+            # to_date is exclusive (same as frontend: shortageDate < startOfToday)
+            to_date_obj = datetime.strptime(to_date, '%Y-%m-%d')
+            exceptions = exceptions.filter(timestamp__lt=to_date_obj)
+        except ValueError:
+            pass
+
+    # --- Status filter ---
+    status_filter = request.query_params.get('status_filter')
+    if status_filter == 'ordered':
+        exceptions = exceptions.filter(ordered_from_company=True)
+    elif status_filter == 'na_cancel':
+        exceptions = exceptions.filter(na_cancel=True)
+    elif status_filter == 'remaining':
+        exceptions = exceptions.filter(ordered_from_company=False, na_cancel=False)
+
+    # --- Minimum days old filter ---
+    min_days_old = request.query_params.get('min_days_old')
+    if min_days_old:
+        try:
+            min_days = int(min_days_old)
+            if min_days > 0:
+                cutoff = timezone.now() - timedelta(days=min_days)
+                exceptions = exceptions.filter(timestamp__lte=cutoff)
+        except ValueError:
+            pass
+
+    # --- Search filter ---
+    search = request.query_params.get('search', '').strip()
+    if search:
+        exceptions = exceptions.filter(
+            Q(sku__icontains=search) |
+            Q(product_title__icontains=search) |
+            Q(vendor_name__icontains=search) |
+            Q(order_numbers__icontains=search)
+        )
+
     csv_content = NotificationService.export_exceptions_to_csv(exceptions)
-    
+
     response = HttpResponse(csv_content, content_type='text/csv')
     response['Content-Disposition'] = 'attachment; filename="stock_exceptions.csv"'
     return response

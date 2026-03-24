@@ -301,7 +301,8 @@ export function PickListPage() {
     return items.filter((item) => {
       const matchesSearch =
         item.title.toLowerCase().includes(searchTerm.toLowerCase()) ||
-        item.sku.toLowerCase().includes(searchTerm.toLowerCase())
+        item.sku.toLowerCase().includes(searchTerm.toLowerCase()) ||
+        (item.vendor_name?.toLowerCase().includes(searchTerm.toLowerCase()) ?? false)
       const matchesCategory = selectedCategories.length === 0 || selectedCategories.includes(item.category)
       const matchesSubcategory = selectedSubcategories.length === 0 || selectedSubcategories.includes(item.subcategory || '')
       const hasRemaining = item.remaining > 0

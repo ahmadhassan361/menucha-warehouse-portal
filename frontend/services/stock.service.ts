@@ -6,8 +6,14 @@ export const stockService = {
     return response.data;
   },
 
-  async exportCSV() {
-    const response = await api.get('/out-of-stock/export', { responseType: 'blob' });
+  async exportCSV(filters?: {
+    from_date?: string;
+    to_date?: string;
+    status_filter?: string;
+    min_days_old?: number;
+    search?: string;
+  }) {
+    const response = await api.get('/out-of-stock/export', { params: filters, responseType: 'blob' });
     const url = window.URL.createObjectURL(new Blob([response.data]));
     const link = document.createElement('a');
     link.href = url;

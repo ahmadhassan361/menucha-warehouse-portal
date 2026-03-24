@@ -187,7 +187,41 @@ export function OutOfStockPage() {
   const handleExportCSV = async () => {
     try {
       setExporting(true)
-      await stockService.exportCSV()
+
+      // Build date range params from the selected date range
+      const now = new Date()
+      const startOfToday = new Date(now.getFullYear(), now.getMonth(), now.getDate())
+      const startOfYesterday = new Date(startOfToday.getTime() - 24 * 60 * 60 * 1000)
+
+      let from_date: string | undefined
+      let to_date: string | undefined
+
+      switch (selectedDateRange) {
+        case "today":
+          from_date = startOfToday.toISOString().split('T')[0]
+          break
+        case "yesterday":
+          from_date = startOfYesterday.toISOString().split('T')[0]
+          to_date = startOfToday.toISOString().split('T')[0]
+          break
+        case "last7days":
+          from_date = new Date(now.getTime() - 7 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+          break
+        case "last30days":
+          from_date = new Date(now.getTime() - 30 * 24 * 60 * 60 * 1000).toISOString().split('T')[0]
+          break
+        case "all":
+        default:
+          break
+      }
+
+      await stockService.exportCSV({
+        from_date,
+        to_date,
+        status_filter: selectedFilter !== "all" ? selectedFilter : undefined,
+        min_days_old: parseInt(minDaysOld) > 0 ? parseInt(minDaysOld) : undefined,
+        search: searchTerm || undefined,
+      })
       toast.success('CSV file downloaded successfully')
     } catch (error: any) {
       console.error('Failed to export CSV:', error)
