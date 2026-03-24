@@ -528,11 +528,16 @@ def stock_exceptions_export_view(request):
     # --- Search filter ---
     search = request.query_params.get('search', '').strip()
     if search:
+        # Find SKUs whose product has a matching vendor name
+        vendor_skus = Product.objects.filter(
+            vendor_name__icontains=search
+        ).values_list('sku', flat=True)
+
         exceptions = exceptions.filter(
             Q(sku__icontains=search) |
             Q(product_title__icontains=search) |
-            Q(vendor_name__icontains=search) |
-            Q(order_numbers__icontains=search)
+            Q(order_numbers__icontains=search) |
+            Q(sku__in=vendor_skus)
         )
 
     csv_content = NotificationService.export_exceptions_to_csv(exceptions)
