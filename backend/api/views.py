@@ -484,7 +484,7 @@ def stock_exceptions_list_view(request):
 def stock_exceptions_export_view(request):
     """Export stock exceptions to CSV, respecting active filters from the UI"""
     # Always export unresolved exceptions only
-    exceptions = StockException.objects.filter(resolved=False).order_by('-timestamp')
+    exceptions = StockException.objects.filter(na_cancel=False,resolved=False).order_by('-timestamp')
 
     # --- Date range filter ---
     from_date = request.query_params.get('from_date')

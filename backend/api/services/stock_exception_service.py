@@ -130,7 +130,7 @@ class StockExceptionService:
         Returns:
             List of StockException objects
         """
-        queryset = StockException.objects.all()
+        queryset = StockException.objects.filter(na_cancel=False).all()
         
         if resolved is not None:
             queryset = queryset.filter(resolved=resolved)
