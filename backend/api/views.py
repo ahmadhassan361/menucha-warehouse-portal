@@ -1,8 +1,10 @@
 from rest_framework import viewsets, status, generics
-from rest_framework.decorators import action, api_view, permission_classes
+from rest_framework.decorators import action, api_view, permission_classes, authentication_classes
 from rest_framework.response import Response
 from rest_framework.permissions import IsAuthenticated, AllowAny
 from rest_framework_simplejwt.tokens import RefreshToken
+from django.conf import settings as django_settings
+from django.db import transaction
 from django.http import HttpResponse
 from django.utils import timezone
 from django.db.models import Q, F
@@ -591,6 +593,116 @@ def send_notification_view(request):
 # ============================================================================
 # Admin Views
 # ============================================================================
+
+KIOSK_EXTERNAL_ID_PREFIX = 'KIOSK-'
+
+
+@extend_schema(exclude=True)
+@api_view(['POST'])
+@authentication_classes([])
+@permission_classes([AllowAny])
+def kiosk_order_import_view(request):
+    """
+    Receive a confirmed kiosk order from the website-scraper service and
+    create a matching Order/OrderItem so the order shows up in the pick list.
+
+    Auth: static token in `X-API-Key` (or `Authorization: Bearer <token>`)
+    matching settings.KIOSK_IMPORT_TOKEN.
+
+    Idempotent: if an order with the same external_order_id already exists,
+    the request is a no-op and returns status="skipped".
+    """
+    expected_token = getattr(django_settings, 'KIOSK_IMPORT_TOKEN', '')
+    if not expected_token:
+        logger.error("KIOSK_IMPORT_TOKEN is not configured")
+        return Response({'error': 'Import endpoint not configured'}, status=503)
+
+    provided = request.headers.get('X-API-Key') or ''
+    if not provided:
+        auth = request.headers.get('Authorization', '')
+        if auth.startswith('Bearer '):
+            provided = auth[len('Bearer '):]
+    if provided != expected_token:
+        return Response({'error': 'Invalid or missing API token'}, status=401)
+
+    data = request.data or {}
+    kiosk_order_id = data.get('kiosk_order_id')
+    if kiosk_order_id in (None, ''):
+        return Response({'error': 'kiosk_order_id is required'}, status=400)
+
+    external_order_id = f"{KIOSK_EXTERNAL_ID_PREFIX}{kiosk_order_id}"
+
+    existing = Order.objects.filter(external_order_id=external_order_id).first()
+    if existing:
+        return Response({
+            'status': 'skipped',
+            'reason': 'duplicate',
+            'order_id': existing.id,
+            'external_order_id': external_order_id,
+        })
+
+    customer_name = (data.get('customer_name') or '').strip() or 'Kiosk Customer'
+    items = data.get('items') or []
+    if not items:
+        return Response({'error': 'At least one item is required'}, status=400)
+
+    with transaction.atomic():
+        order = Order.objects.create(
+            external_order_id=external_order_id,
+            number=str(data.get('number') or external_order_id),
+            customer_name=customer_name,
+            status='open',
+        )
+
+        created_items = 0
+        for raw in items:
+            title = (raw.get('title') or '').strip() or 'Unknown Item'
+            raw_sku = raw.get('sku')
+            sku = str(raw_sku).strip() if raw_sku not in (None, '') else ''
+            if not sku:
+                sku = f"NO_SKU_{title[:20].replace(' ', '_').upper()}"
+
+            try:
+                quantity = int(raw.get('quantity') or 1)
+            except (TypeError, ValueError):
+                quantity = 1
+            if quantity < 1:
+                quantity = 1
+
+            product, _ = Product.objects.get_or_create(
+                sku=sku,
+                defaults={
+                    'title': title,
+                    'category': raw.get('category') or 'Kiosk Orders',
+                    'subcategory': raw.get('subcategory') or '',
+                    'vendor_name': raw.get('vendor_name') or '',
+                    'image_url': raw.get('image_url') or None,
+                },
+            )
+
+            OrderItem.objects.create(
+                order=order,
+                product=product,
+                sku=product.sku,
+                title=title,
+                category=product.category,
+                image_url=raw.get('image_url') or product.image_url,
+                qty_ordered=quantity,
+            )
+            created_items += 1
+
+    logger.info(
+        "Imported kiosk order %s as Order #%s (%d item%s)",
+        external_order_id, order.id, created_items, '' if created_items == 1 else 's',
+    )
+
+    return Response({
+        'status': 'created',
+        'order_id': order.id,
+        'external_order_id': external_order_id,
+        'items_created': created_items,
+    }, status=201)
+
 
 @api_view(['POST'])
 @permission_classes([IsAdmin])

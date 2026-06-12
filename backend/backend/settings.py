@@ -212,6 +212,11 @@ TWILIO_FROM_NUMBER = config('TWILIO_FROM_NUMBER', default='')
 EXTERNAL_API_URL = config('EXTERNAL_API_URL', default='https://www.1800eichlers.com/api/picking/items/f8e2a1c9-4b7d-4e3f-9a2c-8d5e6f7a8b9c')
 AUTO_SYNC_INTERVAL_MINUTES = config('AUTO_SYNC_INTERVAL_MINUTES', default=10, cast=int)
 
+# Static token used by the website-scraper service when pushing confirmed kiosk
+# orders into this warehouse portal via POST /api/orders/kiosk-import.
+# Must match the WAREHOUSE_IMPORT_TOKEN configured in the scraper project.
+KIOSK_IMPORT_TOKEN = config('KIOSK_IMPORT_TOKEN', default='change-me-kiosk-import-token')
+
 # API Documentation
 SPECTACULAR_SETTINGS = {
     'TITLE': 'Order Picking API',

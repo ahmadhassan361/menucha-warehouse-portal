@@ -44,6 +44,11 @@ urlpatterns = [
     path('orders/<int:order_id>/change-state', views.change_order_state_view, name='change-order-state'),
     path('orders/<int:order_id>/split', views.split_order_view, name='split-order'),
     path('orders/<int:order_id>/unsplit', views.unsplit_order_view, name='unsplit-order'),
+
+    # ============================================================================
+    # External integrations
+    # ============================================================================
+    path('orders/kiosk-import', views.kiosk_order_import_view, name='kiosk-import'),
     
     # ============================================================================
     # Out of Stock
