@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 from .models import (
     User, Product, Order, OrderItem, PickEvent,
-    StockException, APIConfiguration, EmailSMSSettings, SyncLog
+    StockException, APIConfiguration, EmailSMSSettings, SyncLog,
 )
 from .serializers import (
     UserSerializer, UserCreateSerializer, LoginSerializer,
@@ -655,6 +655,7 @@ def kiosk_order_import_view(request):
         )
 
         created_items = 0
+        stock_exceptions_created = 0
         for raw in items:
             title = (raw.get('title') or '').strip() or 'Unknown Item'
             raw_sku = raw.get('sku')
@@ -680,6 +681,11 @@ def kiosk_order_import_view(request):
                 },
             )
 
+            # Kiosk-imported items are not in stock by definition (they were
+            # added by a customer at the kiosk, not picked from the warehouse),
+            # so mark the full quantity as short up-front and open a stock
+            # exception so the warehouse team can act on it the same way they
+            # would if they had clicked "Not in Stock" in the UI.
             OrderItem.objects.create(
                 order=order,
                 product=product,
@@ -688,12 +694,26 @@ def kiosk_order_import_view(request):
                 category=product.category,
                 image_url=raw.get('image_url') or product.image_url,
                 qty_ordered=quantity,
+                qty_short=quantity,
             )
             created_items += 1
 
+            StockException.objects.create(
+                sku=product.sku,
+                product_title=title,
+                category=product.category,
+                qty_short=quantity,
+                order_numbers=[order.number],
+                reported_by=None,
+                notes='Auto-marked out of stock: kiosk order import',
+            )
+            stock_exceptions_created += 1
+
     logger.info(
-        "Imported kiosk order %s as Order #%s (%d item%s)",
-        external_order_id, order.id, created_items, '' if created_items == 1 else 's',
+        "Imported kiosk order %s as Order #%s (%d item%s, %d stock exception%s)",
+        external_order_id, order.id,
+        created_items, '' if created_items == 1 else 's',
+        stock_exceptions_created, '' if stock_exceptions_created == 1 else 's',
     )
 
     return Response({
@@ -701,6 +721,7 @@ def kiosk_order_import_view(request):
         'order_id': order.id,
         'external_order_id': external_order_id,
         'items_created': created_items,
+        'stock_exceptions_created': stock_exceptions_created,
     }, status=201)
 
 
