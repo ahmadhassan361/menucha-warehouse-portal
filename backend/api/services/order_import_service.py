@@ -172,15 +172,17 @@ class OrderImportService:
         
         # Auto-mark orders as packed if they're no longer in the API response
         # This ensures pick list only shows currently open orders from the website.
-        # Kiosk-imported orders (external_order_id prefix "KIOSK-") are pushed in
-        # by the scraper service and never appear in the external API response, so
-        # they must be excluded from this sweep.
+        # Kiosk-imported orders (prefix "KIOSK-") and staff-cart orders (prefix
+        # "STAFF-") are pushed in by the scraper service and never appear in the
+        # external API response, so they must be excluded from this sweep.
         orders_to_pack = Order.objects.filter(
             status__in=['open', 'picking', 'ready_to_pack']
         ).exclude(
             external_order_id__in=synced_order_ids
         ).exclude(
             external_order_id__startswith='KIOSK-'
+        ).exclude(
+            external_order_id__startswith='STAFF-'
         )
         
         packed_count = 0

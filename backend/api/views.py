@@ -595,6 +595,8 @@ def send_notification_view(request):
 # ============================================================================
 
 KIOSK_EXTERNAL_ID_PREFIX = 'KIOSK-'
+STAFF_EXTERNAL_ID_PREFIX = 'STAFF-'
+_ALLOWED_PREFIXES = (KIOSK_EXTERNAL_ID_PREFIX, STAFF_EXTERNAL_ID_PREFIX)
 
 
 @extend_schema(exclude=True)
@@ -603,8 +605,24 @@ KIOSK_EXTERNAL_ID_PREFIX = 'KIOSK-'
 @permission_classes([AllowAny])
 def kiosk_order_import_view(request):
     """
-    Receive a confirmed kiosk order from the website-scraper service and
-    create a matching Order/OrderItem so the order shows up in the pick list.
+    Receive a kiosk-style order from the website-scraper service and create a
+    matching Order/OrderItem so the order shows up in the pick list.
+
+    Two modes (controlled by the `out_of_stock` payload flag):
+
+    * `out_of_stock=True` (default) — used for the "confirmed kiosk order"
+      flow from the scraper admin page. Each line is created with
+      `qty_short = qty_ordered` and a `StockException` is opened so the
+      warehouse team can resolve it the same way they'd handle a manual
+      "Not in Stock" click.
+
+    * `out_of_stock=False` — used for the staff cart flow. Items are normal
+      pickable lines with `qty_short = 0`; no StockException is created.
+
+    The `external_order_id_prefix` field on the payload (`KIOSK-` or
+    `STAFF-`) controls which prefix is applied to the unique
+    `external_order_id`. The auto-pack sweep in order_import_service excludes
+    both prefixes so neither flow gets accidentally closed.
 
     Auth: static token in `X-API-Key` (or `Authorization: Bearer <token>`)
     matching settings.KIOSK_IMPORT_TOKEN.
@@ -630,7 +648,19 @@ def kiosk_order_import_view(request):
     if kiosk_order_id in (None, ''):
         return Response({'error': 'kiosk_order_id is required'}, status=400)
 
-    external_order_id = f"{KIOSK_EXTERNAL_ID_PREFIX}{kiosk_order_id}"
+    prefix = data.get('external_order_id_prefix') or KIOSK_EXTERNAL_ID_PREFIX
+    if prefix not in _ALLOWED_PREFIXES:
+        return Response(
+            {'error': f'external_order_id_prefix must be one of {list(_ALLOWED_PREFIXES)}'},
+            status=400,
+        )
+
+    out_of_stock = data.get('out_of_stock')
+    if out_of_stock is None:
+        out_of_stock = True
+    out_of_stock = bool(out_of_stock)
+
+    external_order_id = f"{prefix}{kiosk_order_id}"
 
     existing = Order.objects.filter(external_order_id=external_order_id).first()
     if existing:
@@ -681,11 +711,10 @@ def kiosk_order_import_view(request):
                 },
             )
 
-            # Kiosk-imported items are not in stock by definition (they were
-            # added by a customer at the kiosk, not picked from the warehouse),
-            # so mark the full quantity as short up-front and open a stock
-            # exception so the warehouse team can act on it the same way they
-            # would if they had clicked "Not in Stock" in the UI.
+            # When out_of_stock=True (legacy "confirmed kiosk order" flow), the
+            # line ships as a pre-shortage with a matching StockException so the
+            # warehouse team can decide what to do. When out_of_stock=False
+            # (staff cart flow) the line is a normal pickable item.
             OrderItem.objects.create(
                 order=order,
                 product=product,
@@ -694,26 +723,28 @@ def kiosk_order_import_view(request):
                 category=product.category,
                 image_url=raw.get('image_url') or product.image_url,
                 qty_ordered=quantity,
-                qty_short=quantity,
+                qty_short=quantity if out_of_stock else 0,
             )
             created_items += 1
 
-            StockException.objects.create(
-                sku=product.sku,
-                product_title=title,
-                category=product.category,
-                qty_short=quantity,
-                order_numbers=[order.number],
-                reported_by=None,
-                notes='Auto-marked out of stock: kiosk order import',
-            )
-            stock_exceptions_created += 1
+            if out_of_stock:
+                StockException.objects.create(
+                    sku=product.sku,
+                    product_title=title,
+                    category=product.category,
+                    qty_short=quantity,
+                    order_numbers=[order.number],
+                    reported_by=None,
+                    notes='Auto-marked out of stock: kiosk order import',
+                )
+                stock_exceptions_created += 1
 
     logger.info(
-        "Imported kiosk order %s as Order #%s (%d item%s, %d stock exception%s)",
+        "Imported kiosk order %s as Order #%s (%d item%s, %d stock exception%s, out_of_stock=%s)",
         external_order_id, order.id,
         created_items, '' if created_items == 1 else 's',
         stock_exceptions_created, '' if stock_exceptions_created == 1 else 's',
+        out_of_stock,
     )
 
     return Response({
