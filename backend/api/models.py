@@ -253,6 +253,151 @@ class StockException(models.Model):
         return f"{self.sku} - Short {self.qty_short} units (Orders: {', '.join(map(str, self.order_numbers))})"
 
 
+class ItemIssue(models.Model):
+    """
+    Catalog data problem reported by a picker from the pick list
+
+    One row per (product field, open report). When a picker flags the same
+    field on the same SKU again the existing open row is reused and its
+    report_count incremented, so the export stays one line per real problem
+    instead of one line per click.
+    """
+    FIELD_CHOICES = [
+        ('image', 'Photo / Image'),
+        ('title', 'Title / Name'),
+        ('sku', 'SKU / Barcode'),
+        ('price', 'Price'),
+        ('category', 'Category / Subcategory'),
+        ('vendor', 'Vendor'),
+        ('variation', 'Variation Details'),
+        ('weight', 'Weight / Size'),
+        ('other', 'Other'),
+    ]
+
+    STATUS_CHOICES = [
+        ('open', 'Open'),
+        ('fixed', 'Fixed'),
+        ('dismissed', 'Dismissed'),
+    ]
+
+    # Ready-made notes offered per field so a picker can report a problem in one
+    # tap. Served to the frontend by /api/item-issues/fields — edit them here and
+    # the pick list picks up the change, no frontend deploy needed. A picker can
+    # always type their own note instead.
+    PRESET_NOTES = {
+        'image': [
+            'Wrong image - shows a different product',
+            'Image is missing / blank',
+            'Image is blurry or low quality',
+            'Image shows the wrong cover or edition',
+            'Image shows the wrong colour or variation',
+        ],
+        'title': [
+            'Title does not match the actual product',
+            'Title is misspelled',
+            'Title is incomplete / cut off',
+            'Wrong volume or edition in the title',
+            'Wrong language in the title',
+        ],
+        'sku': [
+            'SKU does not match the product',
+            'Same SKU used for two different products',
+            'SKU is missing from the item',
+            'Barcode does not scan',
+        ],
+        'price': [
+            'Price is wrong',
+            'Price is missing / shows zero',
+            'Price does not match the sticker on the item',
+        ],
+        'category': [
+            'Item is in the wrong category',
+            'Subcategory is wrong',
+            'Category is missing',
+        ],
+        'vendor': [
+            'Wrong vendor listed',
+            'Vendor is missing',
+        ],
+        'variation': [
+            'Wrong size or colour listed',
+            'Variation details are missing',
+            'Variation does not match the actual product',
+        ],
+        'weight': [
+            'Weight is wrong',
+            'Weight is missing',
+        ],
+        'other': [
+            'Item is not the one described',
+            'Duplicate listing on the website',
+            'Item should be removed from the website',
+        ],
+    }
+
+    product = models.ForeignKey(
+        Product, on_delete=models.SET_NULL, null=True, blank=True, related_name='issues'
+    )
+
+    # Snapshot of the product as it looked when reported, so the export still
+    # makes sense after the catalog is corrected
+    sku = models.CharField(max_length=100, db_index=True)
+    title = models.CharField(max_length=500)
+    category = models.CharField(max_length=100, blank=True)
+    subcategory = models.CharField(max_length=100, blank=True)
+    vendor_name = models.CharField(max_length=255, blank=True)
+    image_url = models.URLField(max_length=1000, blank=True, null=True)
+
+    field = models.CharField(max_length=20, choices=FIELD_CHOICES, db_index=True)
+    note = models.TextField(blank=True)
+    report_count = models.IntegerField(default=1, validators=[MinValueValidator(1)])
+
+    status = models.CharField(max_length=20, choices=STATUS_CHOICES, default='open', db_index=True)
+    reported_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name='reported_item_issues'
+    )
+    resolved_by = models.ForeignKey(
+        User, on_delete=models.SET_NULL, null=True, blank=True, related_name='resolved_item_issues'
+    )
+    resolved_at = models.DateTimeField(null=True, blank=True)
+    resolution_notes = models.TextField(blank=True)
+
+    created_at = models.DateTimeField(auto_now_add=True, db_index=True)
+    updated_at = models.DateTimeField(auto_now=True)
+
+    class Meta:
+        db_table = 'item_issues'
+        ordering = ['-created_at']
+        indexes = [
+            models.Index(fields=['sku']),
+            models.Index(fields=['status']),
+            models.Index(fields=['field']),
+            models.Index(fields=['created_at']),
+            models.Index(fields=['sku', 'field', 'status']),
+        ]
+
+    def __str__(self):
+        return f"{self.sku} - {self.get_field_display()} ({self.get_status_display()})"
+
+    def mark_resolved(self, user, status='fixed', notes=''):
+        """Close the issue as fixed or dismissed"""
+        self.status = status
+        self.resolved_by = user
+        self.resolved_at = timezone.now()
+        if notes:
+            self.resolution_notes = notes
+        self.save(update_fields=[
+            'status', 'resolved_by', 'resolved_at', 'resolution_notes', 'updated_at'
+        ])
+
+    def reopen(self):
+        """Put a closed issue back on the open list"""
+        self.status = 'open'
+        self.resolved_by = None
+        self.resolved_at = None
+        self.save(update_fields=['status', 'resolved_by', 'resolved_at', 'updated_at'])
+
+
 class APIConfiguration(models.Model):
     """
     Configuration for external API and sync settings

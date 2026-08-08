@@ -2,8 +2,17 @@ from django.contrib import admin
 from django.contrib.auth.admin import UserAdmin as BaseUserAdmin
 from .models import (
     User, Product, Order, OrderItem, PickEvent,
-    StockException, APIConfiguration, EmailSMSSettings, SyncLog
+    StockException, APIConfiguration, EmailSMSSettings, SyncLog, ItemIssue
 )
+
+
+@admin.register(ItemIssue)
+class ItemIssueAdmin(admin.ModelAdmin):
+    list_display = ['sku', 'title', 'field', 'status', 'report_count', 'reported_by', 'created_at']
+    list_filter = ['status', 'field', 'created_at']
+    search_fields = ['sku', 'title', 'note', 'vendor_name']
+    readonly_fields = ['created_at', 'updated_at']
+    ordering = ['-created_at']
 
 
 @admin.register(User)

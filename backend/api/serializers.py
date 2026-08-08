@@ -2,7 +2,7 @@ from rest_framework import serializers
 from django.contrib.auth import authenticate
 from .models import (
     User, Product, Order, OrderItem, PickEvent,
-    StockException, APIConfiguration, EmailSMSSettings, SyncLog
+    StockException, APIConfiguration, EmailSMSSettings, SyncLog, ItemIssue
 )
 
 
@@ -185,6 +185,57 @@ class StockExceptionSerializer(serializers.ModelSerializer):
             return None
 
 
+class ItemIssueSerializer(serializers.ModelSerializer):
+    """Serializer for reading ItemIssue records"""
+    field_label = serializers.CharField(source='get_field_display', read_only=True)
+    status_label = serializers.CharField(source='get_status_display', read_only=True)
+    reported_by_name = serializers.CharField(source='reported_by.username', read_only=True, default='')
+    resolved_by_name = serializers.CharField(source='resolved_by.username', read_only=True, default='')
+
+    class Meta:
+        model = ItemIssue
+        fields = [
+            'id', 'sku', 'title', 'category', 'subcategory', 'vendor_name', 'image_url',
+            'field', 'field_label', 'note', 'report_count',
+            'status', 'status_label', 'resolution_notes',
+            'reported_by', 'reported_by_name', 'resolved_by', 'resolved_by_name',
+            'resolved_at', 'created_at', 'updated_at',
+        ]
+        read_only_fields = ['id', 'created_at', 'updated_at', 'resolved_at', 'report_count']
+
+
+class ItemIssueEntrySerializer(serializers.Serializer):
+    """A single flagged field within a report"""
+    field = serializers.ChoiceField(choices=[c[0] for c in ItemIssue.FIELD_CHOICES])
+    note = serializers.CharField(allow_blank=True, required=False, default='')
+
+
+class ItemIssueCreateSerializer(serializers.Serializer):
+    """
+    Serializer for reporting inaccurate item data from the pick list.
+    One submission can flag several fields at once.
+    """
+    sku = serializers.CharField()
+    issues = ItemIssueEntrySerializer(many=True)
+
+    def validate_issues(self, value):
+        if not value:
+            raise serializers.ValidationError("Select at least one problem to report")
+
+        seen = set()
+        for entry in value:
+            if entry['field'] in seen:
+                raise serializers.ValidationError(f"Duplicate field in report: {entry['field']}")
+            seen.add(entry['field'])
+        return value
+
+
+class ItemIssueStatusSerializer(serializers.Serializer):
+    """Serializer for changing the status of an issue"""
+    status = serializers.ChoiceField(choices=[c[0] for c in ItemIssue.STATUS_CHOICES])
+    resolution_notes = serializers.CharField(required=False, allow_blank=True)
+
+
 class APIConfigurationSerializer(serializers.ModelSerializer):
     """Serializer for APIConfiguration model"""
     
@@ -250,6 +301,7 @@ class PickListItemSerializer(serializers.Serializer):
     picked = serializers.IntegerField()
     remaining = serializers.IntegerField()
     store_quantity_available = serializers.IntegerField()
+    open_issue_count = serializers.IntegerField()
 
 
 class PickActionSerializer(serializers.Serializer):

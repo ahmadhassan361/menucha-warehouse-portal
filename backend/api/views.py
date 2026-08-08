@@ -16,7 +16,7 @@ logger = logging.getLogger(__name__)
 
 from .models import (
     User, Product, Order, OrderItem, PickEvent,
-    StockException, APIConfiguration, EmailSMSSettings, SyncLog,
+    StockException, APIConfiguration, EmailSMSSettings, SyncLog, ItemIssue,
 )
 from .serializers import (
     UserSerializer, UserCreateSerializer, LoginSerializer,
@@ -25,7 +25,8 @@ from .serializers import (
     APIConfigurationSerializer, EmailSMSSettingsSerializer, SyncLogSerializer,
     PickListItemSerializer, PickActionSerializer, NotInStockActionSerializer,
     MarkPackedSerializer, SendNotificationSerializer, PickListStatsSerializer,
-    SplitOrderSerializer
+    SplitOrderSerializer, ItemIssueSerializer, ItemIssueCreateSerializer,
+    ItemIssueStatusSerializer
 )
 from .permissions import (
     IsAdmin, IsPicker, IsPacker, IsPickerOrPacker,
@@ -588,6 +589,255 @@ def send_notification_view(request):
             {'error': message},
             status=status.HTTP_400_BAD_REQUEST
         )
+
+
+# ============================================================================
+# Item Issue Views (inaccurate catalog data reported from the pick list)
+# ============================================================================
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def item_issue_fields_view(request):
+    """
+    Get the reportable fields and their ready-made notes.
+    Drives the "Report Inaccurate Info" dialog on the pick list.
+    """
+    return Response([
+        {
+            'field': key,
+            'label': label,
+            'preset_notes': ItemIssue.PRESET_NOTES.get(key, []),
+        }
+        for key, label in ItemIssue.FIELD_CHOICES
+    ])
+
+
+@extend_schema(
+    request=ItemIssueCreateSerializer,
+    responses={200: ItemIssueSerializer(many=True)}
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def report_item_issue_view(request):
+    """
+    Report one or more inaccurate fields for a SKU.
+
+    Re-reporting a field that is already open bumps its report_count and keeps
+    the newest note, so the export stays one row per real problem.
+    """
+    serializer = ItemIssueCreateSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    sku = serializer.validated_data['sku'].strip()
+    entries = serializer.validated_data['issues']
+
+    product = Product.objects.filter(sku=sku).first()
+    if not product:
+        return Response(
+            {'error': f'No product found for SKU: {sku}'},
+            status=status.HTTP_404_NOT_FOUND
+        )
+
+    created_count = 0
+    updated_count = 0
+    results = []
+
+    with transaction.atomic():
+        for entry in entries:
+            field = entry['field']
+            note = (entry.get('note') or '').strip()
+
+            existing = ItemIssue.objects.filter(
+                sku=sku, field=field, status='open'
+            ).order_by('-created_at').first()
+
+            if existing:
+                existing.report_count += 1
+                if note:
+                    existing.note = note
+                existing.reported_by = request.user
+                existing.save(update_fields=['report_count', 'note', 'reported_by', 'updated_at'])
+                results.append(existing)
+                updated_count += 1
+                logger.info(
+                    f"{request.user.username} re-reported {field} issue on {sku} "
+                    f"(now {existing.report_count} reports)"
+                )
+            else:
+                issue = ItemIssue.objects.create(
+                    product=product,
+                    sku=sku,
+                    title=product.title,
+                    category=product.category or '',
+                    subcategory=product.subcategory or '',
+                    vendor_name=product.vendor_name or '',
+                    image_url=product.image_url,
+                    field=field,
+                    note=note,
+                    reported_by=request.user,
+                )
+                results.append(issue)
+                created_count += 1
+                logger.info(f"{request.user.username} reported {field} issue on {sku}: {note}")
+
+    parts = []
+    if created_count:
+        parts.append(f"{created_count} new issue{'' if created_count == 1 else 's'} reported")
+    if updated_count:
+        parts.append(f"{updated_count} existing issue{'' if updated_count == 1 else 's'} updated")
+
+    return Response({
+        'message': f"{sku}: " + ", ".join(parts),
+        'created': created_count,
+        'updated': updated_count,
+        'issues': ItemIssueSerializer(results, many=True).data,
+    })
+
+
+@extend_schema(
+    parameters=[
+        OpenApiParameter('status', str, description='Filter by status (open, fixed, dismissed, all)'),
+        OpenApiParameter('field', str, description='Filter by reported field'),
+        OpenApiParameter('search', str, description='Search by SKU, title, vendor or note'),
+        OpenApiParameter('from_date', str, description='Filter from date (YYYY-MM-DD)'),
+        OpenApiParameter('to_date', str, description='Filter to date (YYYY-MM-DD)'),
+    ],
+    responses={200: ItemIssueSerializer(many=True)}
+)
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def item_issues_list_view(request):
+    """Get reported item issues with optional filters"""
+    issues = _filter_item_issues(request)
+    serializer = ItemIssueSerializer(issues, many=True)
+    return Response(serializer.data)
+
+
+def _filter_item_issues(request):
+    """Shared filtering for the item issues list and its CSV export"""
+    issues = ItemIssue.objects.select_related('reported_by', 'resolved_by').all()
+
+    status_filter = request.query_params.get('status', 'open')
+    if status_filter and status_filter != 'all':
+        issues = issues.filter(status=status_filter)
+
+    field_filter = request.query_params.get('field')
+    if field_filter and field_filter != 'all':
+        issues = issues.filter(field=field_filter)
+
+    from_date = request.query_params.get('from_date')
+    if from_date:
+        try:
+            issues = issues.filter(created_at__gte=datetime.strptime(from_date, '%Y-%m-%d'))
+        except ValueError:
+            pass
+
+    to_date = request.query_params.get('to_date')
+    if to_date:
+        try:
+            issues = issues.filter(
+                created_at__lt=datetime.strptime(to_date, '%Y-%m-%d') + timedelta(days=1)
+            )
+        except ValueError:
+            pass
+
+    search = request.query_params.get('search', '').strip()
+    if search:
+        issues = issues.filter(
+            Q(sku__icontains=search) |
+            Q(title__icontains=search) |
+            Q(vendor_name__icontains=search) |
+            Q(note__icontains=search)
+        )
+
+    return issues.order_by('-created_at')
+
+
+@extend_schema(
+    request=ItemIssueStatusSerializer,
+    responses={200: ItemIssueSerializer}
+)
+@api_view(['POST'])
+@permission_classes([IsAuthenticated])
+def update_item_issue_status_view(request, issue_id):
+    """Mark a reported issue as fixed, dismissed, or reopen it"""
+    try:
+        issue = ItemIssue.objects.get(id=issue_id)
+    except ItemIssue.DoesNotExist:
+        return Response({'error': 'Issue not found'}, status=status.HTTP_404_NOT_FOUND)
+
+    serializer = ItemIssueStatusSerializer(data=request.data)
+    if not serializer.is_valid():
+        return Response(serializer.errors, status=status.HTTP_400_BAD_REQUEST)
+
+    new_status = serializer.validated_data['status']
+    notes = serializer.validated_data.get('resolution_notes', '')
+
+    if new_status == 'open':
+        issue.reopen()
+    else:
+        issue.mark_resolved(request.user, status=new_status, notes=notes)
+
+    logger.info(f"{request.user.username} set issue {issue.id} ({issue.sku}) to {new_status}")
+
+    return Response({
+        'message': f'{issue.sku} - {issue.get_field_display()} marked as {issue.get_status_display()}',
+        'issue': ItemIssueSerializer(issue).data,
+    })
+
+
+@api_view(['GET'])
+@permission_classes([IsAuthenticated])
+def item_issues_export_view(request):
+    """Export reported item issues to CSV (opens directly in Excel)"""
+    import csv
+    from io import StringIO
+
+    issues = _filter_item_issues(request)
+
+    output = StringIO()
+    writer = csv.writer(output)
+    writer.writerow([
+        'SKU',
+        'Product Title',
+        'Problem With',
+        'Details',
+        'Times Reported',
+        'Category',
+        'Subcategory',
+        'Vendor',
+        'Image URL',
+        'Reported By',
+        'Reported At',
+        'Status',
+        'Resolved By',
+        'Resolved At',
+        'Resolution Notes',
+    ])
+
+    for issue in issues:
+        writer.writerow([
+            issue.sku,
+            issue.title,
+            issue.get_field_display(),
+            issue.note,
+            issue.report_count,
+            issue.category,
+            issue.subcategory,
+            issue.vendor_name,
+            issue.image_url or '',
+            issue.reported_by.username if issue.reported_by else 'Unknown',
+            issue.created_at.strftime('%Y-%m-%d %H:%M:%S'),
+            issue.get_status_display(),
+            issue.resolved_by.username if issue.resolved_by else '',
+            issue.resolved_at.strftime('%Y-%m-%d %H:%M:%S') if issue.resolved_at else '',
+            issue.resolution_notes,
+        ])
+
+    response = HttpResponse(output.getvalue(), content_type='text/csv')
+    response['Content-Disposition'] = 'attachment; filename="inaccurate_items.csv"'
+    return response
 
 
 # ============================================================================

@@ -1,6 +1,6 @@
 "use client"
 
-import { Package, ClipboardCheck, FileText, CheckCircle, Archive, AlertTriangle } from "lucide-react"
+import { Package, ClipboardCheck, FileText, CheckCircle, Archive, AlertTriangle, Flag } from "lucide-react"
 import { cn } from "@/lib/utils"
 
 interface BottomNavigationProps {
@@ -40,6 +40,11 @@ export function BottomNavigation({ activeTab, onTabChange, userRole }: BottomNav
       id: "out-of-stock",
       label: "Out of Stock",
       icon: AlertTriangle,
+    },
+    {
+      id: "item-issues",
+      label: "Inaccurate",
+      icon: Flag,
     },
   ]
 

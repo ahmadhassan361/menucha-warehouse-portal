@@ -61,6 +61,15 @@ urlpatterns = [
     path('out-of-stock/<int:exception_id>/toggle-na-cancel', views.toggle_na_cancel_view, name='toggle-na-cancel'),
     
     # ============================================================================
+    # Item Issues (inaccurate catalog data)
+    # ============================================================================
+    path('item-issues', views.item_issues_list_view, name='item-issues'),
+    path('item-issues/fields', views.item_issue_fields_view, name='item-issue-fields'),
+    path('item-issues/export', views.item_issues_export_view, name='item-issues-export'),
+    path('item-issues/report', views.report_item_issue_view, name='report-item-issue'),
+    path('item-issues/<int:issue_id>/status', views.update_item_issue_status_view, name='update-item-issue-status'),
+
+    # ============================================================================
     # Admin
     # ============================================================================
     path('admin/sync', views.sync_now_view, name='sync-now'),

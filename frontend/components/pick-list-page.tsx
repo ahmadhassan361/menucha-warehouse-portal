@@ -1,8 +1,9 @@
 "use client"
 
 import { useState, useMemo, useEffect } from "react"
-import { Search, RefreshCw, Plus, AlertCircle, Loader2, X, ChevronDown, ChevronUp } from "lucide-react"
+import { Search, RefreshCw, Plus, AlertCircle, Loader2, X, ChevronDown, ChevronUp, Flag } from "lucide-react"
 import { NotInStockDialog } from "@/components/not-in-stock-dialog"
+import { ReportItemIssueDialog } from "@/components/report-item-issue-dialog"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -25,6 +26,7 @@ interface PickListItem {
   picked: number
   remaining: number
   price?: number
+  open_issue_count?: number
 }
 
 export function PickListPage() {
@@ -51,8 +53,10 @@ export function PickListPage() {
   const [lastSyncTime, setLastSyncTime] = useState<Date | null>(null)
   const [pickQuantities, setPickQuantities] = useState<Record<string, number>>({})
   const [notInStockDialogOpen, setNotInStockDialogOpen] = useState(false)
+  const [reportIssueDialogOpen, setReportIssueDialogOpen] = useState(false)
   const [selectedSku, setSelectedSku] = useState("")
   const [selectedItemTitle, setSelectedItemTitle] = useState("")
+  const [selectedItemImage, setSelectedItemImage] = useState<string | undefined>(undefined)
   const [previewImage, setPreviewImage] = useState<string | null>(null)
   const [previewTitle, setPreviewTitle] = useState<string>("")
   const [categoryNavExpanded, setCategoryNavExpanded] = useState(false)
@@ -229,6 +233,27 @@ export function PickListPage() {
 
   const handleNotInStockSuccess = () => {
     loadPickList()
+  }
+
+  const handleReportIssue = (sku: string) => {
+    const item = items.find(i => i.sku === sku)
+    if (!item) return
+
+    setSelectedSku(sku)
+    setSelectedItemTitle(item.title)
+    setSelectedItemImage(item.image_url || undefined)
+    setReportIssueDialogOpen(true)
+  }
+
+  // Bump the flag badge straight away instead of refetching the whole pick list
+  const handleReportIssueSuccess = (reportedFields: number) => {
+    setItems((prev) =>
+      prev.map((item) =>
+        item.sku === selectedSku
+          ? { ...item, open_issue_count: (item.open_issue_count || 0) + reportedFields }
+          : item
+      )
+    )
   }
 
   // Toggle category selection
@@ -591,6 +616,12 @@ export function PickListPage() {
 
                         <div className="flex-1 min-w-0">
                           <h3 className="font-semibold text-foreground leading-tight">{item.title}</h3>
+                          {(item.open_issue_count ?? 0) > 0 && (
+                            <Badge variant="outline" className="mt-1 border-amber-500 text-amber-600 dark:text-amber-400">
+                              <Flag className="h-3 w-3 mr-1" />
+                              {item.open_issue_count} info issue{item.open_issue_count === 1 ? '' : 's'} reported
+                            </Badge>
+                          )}
                           <p className="text-sm text-muted-foreground mt-1">SKU: {item.sku}</p>
                           {item.vendor_name && (
                             <p className="text-xs text-muted-foreground">Vendor: {item.vendor_name}</p>
@@ -690,6 +721,16 @@ export function PickListPage() {
                             <AlertCircle className="h-3 w-3 mr-1" />
                             No Stock
                           </Button>
+
+                          <Button
+                            onClick={() => handleReportIssue(item.sku)}
+                            size="sm"
+                            variant="outline"
+                            className="min-w-[80px] border-amber-500 text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/30"
+                          >
+                            <Flag className="h-3 w-3 mr-1" />
+                            Inaccurate
+                          </Button>
                         </div>
                       </div>
 
@@ -709,6 +750,12 @@ export function PickListPage() {
                         {/* Title & SKU */}
                         <div>
                           <h3 className="font-semibold text-foreground text-lg leading-tight">{item.title}</h3>
+                          {(item.open_issue_count ?? 0) > 0 && (
+                            <Badge variant="outline" className="mt-2 border-amber-500 text-amber-600 dark:text-amber-400">
+                              <Flag className="h-3 w-3 mr-1" />
+                              {item.open_issue_count} info issue{item.open_issue_count === 1 ? '' : 's'} reported
+                            </Badge>
+                          )}
                           <p className="text-sm text-muted-foreground mt-1">SKU: {item.sku}</p>
                           {item.vendor_name && (
                             <p className="text-xs text-muted-foreground">Vendor: {item.vendor_name}</p>
@@ -812,6 +859,16 @@ export function PickListPage() {
                             <AlertCircle className="h-4 w-4 mr-2" />
                             Not in Stock
                           </Button>
+
+                          {/* Report Inaccurate Info Button */}
+                          <Button
+                            onClick={() => handleReportIssue(item.sku)}
+                            variant="outline"
+                            className="w-full border-amber-500 text-amber-600 hover:bg-amber-50 dark:text-amber-400 dark:hover:bg-amber-950/30"
+                          >
+                            <Flag className="h-4 w-4 mr-2" />
+                            Report Inaccurate Info
+                          </Button>
                         </div>
                       </div>
                     </CardContent>
@@ -846,6 +903,15 @@ export function PickListPage() {
         sku={selectedSku}
         itemTitle={selectedItemTitle}
         onSuccess={handleNotInStockSuccess}
+      />
+
+      <ReportItemIssueDialog
+        open={reportIssueDialogOpen}
+        onOpenChange={setReportIssueDialogOpen}
+        sku={selectedSku}
+        itemTitle={selectedItemTitle}
+        imageUrl={selectedItemImage}
+        onSuccess={handleReportIssueSuccess}
       />
 
       {/* Image Preview Dialog */}

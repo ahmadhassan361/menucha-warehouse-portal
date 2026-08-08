@@ -7,6 +7,7 @@ import { OrderStatusPage } from "@/components/order-status-page"
 import { ReadyToPackPage } from "@/components/ready-to-pack-page"
 import { PackedOrdersPage } from "@/components/packed-orders-page"
 import { OutOfStockPage } from "@/components/out-of-stock-page"
+import { ItemIssuesPage } from "@/components/item-issues-page"
 import { AdminPage } from "@/components/admin-page"
 import { BottomNavigation } from "@/components/bottom-navigation"
 import { ProtectedRoute } from "@/components/protected-route"
@@ -38,6 +39,8 @@ export default function HomePage() {
         return <PackedOrdersPage />
       case "out-of-stock":
         return <OutOfStockPage />
+      case "item-issues":
+        return <ItemIssuesPage />
       case "admin":
         // Allow all users to access admin page (staff can change password)
         return <AdminPage />

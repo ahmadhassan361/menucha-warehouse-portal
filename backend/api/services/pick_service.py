@@ -1,8 +1,8 @@
 import logging
 from django.db import transaction
-from django.db.models import F, Q, Sum
+from django.db.models import F, Q, Sum, Count
 from typing import Dict, List, Tuple, Any
-from ..models import OrderItem, PickEvent, Order
+from ..models import OrderItem, PickEvent, Order, ItemIssue
 
 logger = logging.getLogger(__name__)
 
@@ -27,10 +27,18 @@ class PickService:
             order__ready_to_pack=False,
             shipment_batch=F('order__current_shipment')
         ).select_related('product')
-        
+
+        # How many unresolved data problems each SKU has, so the pick list can
+        # show pickers that an item was already reported as inaccurate
+        open_issues = dict(
+            ItemIssue.objects.filter(status='open')
+            .values_list('sku')
+            .annotate(count=Count('id'))
+        )
+
         # Group by SKU and aggregate
         sku_dict = {}
-        
+
         for item in order_items:
             sku = item.sku
             
@@ -48,6 +56,7 @@ class PickService:
                     'picked': 0,
                     'remaining': 0,
                     'store_quantity_available': item.product.store_quantity_available if item.product else 0,
+                    'open_issue_count': open_issues.get(sku, 0),
                 }
             
             # Aggregate quantities
