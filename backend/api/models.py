@@ -41,7 +41,10 @@ class Product(models.Model):
     weight = models.CharField(max_length=50, blank=True)
     item_type = models.CharField(max_length=50, default='product')
     store_quantity_available = models.IntegerField(default=0)
-    
+
+    # Item-level flag from the external API: this product needs book binding
+    book_binding = models.BooleanField(default=False, db_index=True)
+
     created_at = models.DateTimeField(auto_now_add=True)
     updated_at = models.DateTimeField(auto_now=True)
     
@@ -171,7 +174,15 @@ class OrderItem(models.Model):
     qty_ordered = models.IntegerField(validators=[MinValueValidator(1)])
     qty_picked = models.IntegerField(default=0, validators=[MinValueValidator(0)])
     qty_short = models.IntegerField(default=0, validators=[MinValueValidator(0)])
-    
+
+    # Book binding is decided per order line, not per product: the same SKU can
+    # be ordered by one customer with binding and by another without. The
+    # external API sends the instruction (e.g. "1 of 1 copies") on the order
+    # line, and it is absent when that line needs no binding.
+    book_binding = models.BooleanField(default=False, db_index=True)
+    book_binding_detail = models.CharField(max_length=255, blank=True, default='')
+
+
     # Shipment batch assignment (1, 2, 3, etc.)
     shipment_batch = models.IntegerField(default=1, validators=[MinValueValidator(1)])
     
@@ -347,6 +358,7 @@ class ItemIssue(models.Model):
     subcategory = models.CharField(max_length=100, blank=True)
     vendor_name = models.CharField(max_length=255, blank=True)
     image_url = models.URLField(max_length=1000, blank=True, null=True)
+    book_binding = models.BooleanField(default=False)
 
     field = models.CharField(max_length=20, choices=FIELD_CHOICES, db_index=True)
     note = models.TextField(blank=True)

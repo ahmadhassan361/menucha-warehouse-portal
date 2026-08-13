@@ -26,7 +26,7 @@ class PickService:
             order__status__in=['open', 'picking'],
             order__ready_to_pack=False,
             shipment_batch=F('order__current_shipment')
-        ).select_related('product')
+        ).select_related('product', 'order')
 
         # How many unresolved data problems each SKU has, so the pick list can
         # show pickers that an item was already reported as inaccurate
@@ -57,12 +57,27 @@ class PickService:
                     'remaining': 0,
                     'store_quantity_available': item.product.store_quantity_available if item.product else 0,
                     'open_issue_count': open_issues.get(sku, 0),
+                    'book_binding': item.product.book_binding if item.product else False,
+                    'book_binding_qty': 0,
+                    'book_binding_details': [],
                 }
-            
+
             # Aggregate quantities
             sku_dict[sku]['needed'] += item.qty_ordered
             sku_dict[sku]['picked'] += item.qty_picked
             sku_dict[sku]['remaining'] += item.qty_remaining
+
+            # The pick list groups by SKU, but binding is decided per order, so
+            # only some of the units for a SKU may need it. Track how many, and
+            # from which orders, so the picker knows what to set aside.
+            if item.book_binding:
+                sku_dict[sku]['book_binding'] = True
+                sku_dict[sku]['book_binding_qty'] += item.qty_ordered
+                sku_dict[sku]['book_binding_details'].append({
+                    'order_number': item.order.number,
+                    'qty': item.qty_ordered,
+                    'detail': item.book_binding_detail,
+                })
         
         # Convert to list and sort by category and SKU
         pick_list = list(sku_dict.values())

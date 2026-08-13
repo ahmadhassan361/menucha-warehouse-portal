@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { itemIssuesService, type ItemIssue, type ItemIssueField } from "@/services/item-issues.service"
+import { BookBindingBadge } from "@/components/book-binding-badge"
 import { toast } from "sonner"
 
 export function ItemIssuesPage() {
@@ -218,6 +219,7 @@ export function ItemIssuesPage() {
                     </div>
 
                     <h3 className="font-semibold text-foreground leading-tight">{issue.title}</h3>
+                    {issue.book_binding && <BookBindingBadge className="pt-1" />}
                     <p className="text-sm text-muted-foreground">SKU: {issue.sku}</p>
                     {issue.vendor_name && (
                       <p className="text-xs text-muted-foreground">Vendor: {issue.vendor_name}</p>

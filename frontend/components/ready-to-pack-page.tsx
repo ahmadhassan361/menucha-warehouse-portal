@@ -19,6 +19,7 @@ import {
 import { Collapsible, CollapsibleContent, CollapsibleTrigger } from "@/components/ui/collapsible"
 import { ordersService } from "@/services/orders.service"
 import { toast } from "sonner"
+import { BookBindingBadge } from "@/components/book-binding-badge"
 
 interface OrderItem {
   sku: string
@@ -27,6 +28,8 @@ interface OrderItem {
   qty_picked: number
   qty_short: number
   shipment_batch: number
+  book_binding?: boolean
+  book_binding_detail?: string
   image_url?: string
   product?: {
     vendor_name?: string
@@ -281,6 +284,9 @@ export function ReadyToPackPage() {
                                   </Badge>
                                 )}
                               </div>
+                              {item.book_binding && (
+                                <BookBindingBadge className="mb-2" detail={item.book_binding_detail} qty={item.qty_ordered} />
+                              )}
                               <div className="text-xs text-muted-foreground space-y-0.5 mb-2">
                                 <div>SKU: {item.sku}</div>
                                 {item.product?.vendor_name && (

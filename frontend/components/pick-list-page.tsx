@@ -4,6 +4,7 @@ import { useState, useMemo, useEffect } from "react"
 import { Search, RefreshCw, Plus, AlertCircle, Loader2, X, ChevronDown, ChevronUp, Flag } from "lucide-react"
 import { NotInStockDialog } from "@/components/not-in-stock-dialog"
 import { ReportItemIssueDialog } from "@/components/report-item-issue-dialog"
+import { BookBindingBadge, type BookBindingDetail } from "@/components/book-binding-badge"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { Button } from "@/components/ui/button"
 import { Input } from "@/components/ui/input"
@@ -27,6 +28,9 @@ interface PickListItem {
   remaining: number
   price?: number
   open_issue_count?: number
+  book_binding?: boolean
+  book_binding_qty?: number
+  book_binding_details?: BookBindingDetail[]
 }
 
 export function PickListPage() {
@@ -616,6 +620,14 @@ export function PickListPage() {
 
                         <div className="flex-1 min-w-0">
                           <h3 className="font-semibold text-foreground leading-tight">{item.title}</h3>
+                          {item.book_binding && (
+                            <BookBindingBadge
+                              className="mt-2"
+                              qty={item.book_binding_qty}
+                              total={item.needed}
+                              details={item.book_binding_details}
+                            />
+                          )}
                           {(item.open_issue_count ?? 0) > 0 && (
                             <Badge variant="outline" className="mt-1 border-amber-500 text-amber-600 dark:text-amber-400">
                               <Flag className="h-3 w-3 mr-1" />
@@ -750,6 +762,14 @@ export function PickListPage() {
                         {/* Title & SKU */}
                         <div>
                           <h3 className="font-semibold text-foreground text-lg leading-tight">{item.title}</h3>
+                          {item.book_binding && (
+                            <BookBindingBadge
+                              className="mt-2"
+                              qty={item.book_binding_qty}
+                              total={item.needed}
+                              details={item.book_binding_details}
+                            />
+                          )}
                           {(item.open_issue_count ?? 0) > 0 && (
                             <Badge variant="outline" className="mt-2 border-amber-500 text-amber-600 dark:text-amber-400">
                               <Flag className="h-3 w-3 mr-1" />

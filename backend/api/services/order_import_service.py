@@ -151,7 +151,8 @@ class OrderImportService:
                                     order=order,
                                     product=product,
                                     item=item,
-                                    quantity=order_data.get('quantity', 1)
+                                    quantity=order_data.get('quantity', 1),
+                                    book_binding_detail=order_data.get('book_binding_detail')
                                 )
                             except Exception as e:
                                 error_msg = f"Failed to process order {order_data.get('order_id')}: {str(e)}"
@@ -228,6 +229,7 @@ class OrderImportService:
                 'weight': str(item.get('weight', '')),
                 'item_type': item.get('item_type', 'product'),
                 'store_quantity_available': item.get('store_quantity_available', 0),
+                'book_binding': bool(item.get('book_binding', False)),
             }
         )
         
@@ -271,8 +273,14 @@ class OrderImportService:
         
         return order
     
-    def _upsert_order_item(self, order: Order, product: Product, item: Dict[str, Any], quantity: int):
+    def _upsert_order_item(self, order: Order, product: Product, item: Dict[str, Any],
+                           quantity: int, book_binding_detail: Any = None):
         """Create or update order item"""
+        # book_binding_detail is null on lines that need no binding, so its
+        # presence is what marks this particular line as a binding job
+        detail = str(book_binding_detail).strip() if book_binding_detail else ''
+        needs_binding = bool(detail)
+
         # Check if this order item already exists
         order_item, created = OrderItem.objects.get_or_create(
             order=order,
@@ -285,16 +293,31 @@ class OrderImportService:
                 'qty_ordered': quantity,
                 'qty_picked': 0,
                 'qty_short': 0,
+                'book_binding': needs_binding,
+                'book_binding_detail': detail,
             }
         )
-        
+
         if created:
             self.stats['order_items_created'] += 1
             logger.debug(f"Created order item: {order.number} - {product.sku} x{quantity}")
         else:
             # Update quantity if different (but preserve picked/short quantities)
+            changed = []
             if order_item.qty_ordered != quantity:
                 order_item.qty_ordered = quantity
-                order_item.save(update_fields=['qty_ordered', 'updated_at'])
+                changed.append('qty_ordered')
+
+            # Binding instructions can be added or withdrawn after the order is
+            # placed, so keep them in step with the feed on every sync
+            if order_item.book_binding != needs_binding:
+                order_item.book_binding = needs_binding
+                changed.append('book_binding')
+            if order_item.book_binding_detail != detail:
+                order_item.book_binding_detail = detail
+                changed.append('book_binding_detail')
+
+            if changed:
+                order_item.save(update_fields=changed + ['updated_at'])
                 self.stats['order_items_updated'] += 1
-                logger.debug(f"Updated order item quantity: {order.number} - {product.sku}")
+                logger.debug(f"Updated order item ({', '.join(changed)}): {order.number} - {product.sku}")

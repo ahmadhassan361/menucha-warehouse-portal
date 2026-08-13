@@ -14,6 +14,7 @@ import { Dialog, DialogContent, DialogTitle, DialogDescription } from "@/compone
 import { orderStatusService, OrderStatus } from "@/services/order-status.service"
 import { SplitOrderDialog } from "@/components/split-order-dialog"
 import { toast } from "sonner"
+import { BookBindingBadge } from "@/components/book-binding-badge"
 
 export function OrderStatusPage() {
   const [orders, setOrders] = useState<OrderStatus[]>([])
@@ -448,6 +449,9 @@ export function OrderStatusPage() {
 
                           <div className="flex-1 min-w-0">
                             <h5 className="font-medium text-sm leading-tight">{item.title}</h5>
+                            {item.book_binding && (
+                              <BookBindingBadge className="mt-2" detail={item.book_binding_detail} qty={item.qty_ordered} />
+                            )}
                             <p className="text-xs text-muted-foreground mt-1">
                               SKU: {item.sku} • {item.category}
                               {item.subcategory && ` > ${item.subcategory}`}

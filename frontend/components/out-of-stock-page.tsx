@@ -11,6 +11,7 @@ import { Checkbox } from "@/components/ui/checkbox"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { stockService } from "@/services/stock.service"
 import { toast } from "sonner"
+import { BookBindingBadge, type BookBindingDetail } from "@/components/book-binding-badge"
 
 interface StockException {
   id: number
@@ -26,6 +27,8 @@ interface StockException {
   vendor_name?: string
   variation_details?: string
   image_url?: string
+  book_binding?: boolean
+  book_binding_details?: BookBindingDetail[]
 }
 
 const dateRangeOptions = [
@@ -462,6 +465,9 @@ export function OutOfStockPage() {
                   </div>
 
                   <h4 className="font-medium text-foreground mb-1">{shortage.product_title}</h4>
+                  {shortage.book_binding && (
+                    <BookBindingBadge className="mb-2" details={shortage.book_binding_details} />
+                  )}
                   <div className="text-sm text-muted-foreground space-y-0.5 mb-3">
                     <div>Category: {shortage.category}</div>
                     {shortage.vendor_name && (
@@ -556,6 +562,9 @@ export function OutOfStockPage() {
                   </div>
 
                   <h4 className="font-medium text-foreground mb-1">{shortage.product_title}</h4>
+                  {shortage.book_binding && (
+                    <BookBindingBadge className="mb-2" details={shortage.book_binding_details} />
+                  )}
                   <div className="text-sm text-muted-foreground space-y-0.5 mb-3">
                     <div>Category: {shortage.category}</div>
                     {shortage.vendor_name && (

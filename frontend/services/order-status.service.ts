@@ -14,6 +14,8 @@ export interface OrderItemStatus {
   qty_short: number;
   qty_remaining: number;
   shipment_batch: number;
+  book_binding?: boolean;
+  book_binding_detail?: string;
   picked_by?: string;
   picked_at?: string;
 }

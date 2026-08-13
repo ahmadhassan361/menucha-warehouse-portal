@@ -9,6 +9,7 @@ import { Badge } from "@/components/ui/badge"
 import { Select, SelectContent, SelectItem, SelectTrigger, SelectValue } from "@/components/ui/select"
 import { Dialog, DialogContent } from "@/components/ui/dialog"
 import { pickedItemsService, PickedItem } from "@/services/picked-items.service"
+import { BookBindingBadge } from "@/components/book-binding-badge"
 import { toast } from "sonner"
 
 export function PickedItemsPage() {
@@ -314,6 +315,9 @@ export function PickedItemsPage() {
 
                 <div className="flex-1 min-w-0">
                   <h3 className="font-semibold text-foreground leading-tight">{item.title}</h3>
+                  {item.book_binding && (
+                    <BookBindingBadge className="mt-2" detail={item.book_binding_detail} qty={item.qty_ordered} />
+                  )}
                   
                   <div className="grid grid-cols-2 gap-x-4 gap-y-1 mt-2 text-xs text-muted-foreground">
                     <div>
@@ -396,6 +400,9 @@ export function PickedItemsPage() {
 
                 <div>
                   <h3 className="font-semibold text-foreground text-lg leading-tight">{item.title}</h3>
+                  {item.book_binding && (
+                    <BookBindingBadge className="mt-2" detail={item.book_binding_detail} qty={item.qty_ordered} />
+                  )}
                   
                   <div className="space-y-1 mt-2 text-sm">
                     <div className="text-muted-foreground">

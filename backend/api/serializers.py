@@ -57,7 +57,7 @@ class ProductSerializer(serializers.ModelSerializer):
         model = Product
         fields = [
             'id', 'sku', 'title', 'category', 'subcategory', 'vendor_name', 'variation_details',
-            'image_url', 'price', 'weight', 'item_type', 
+            'image_url', 'price', 'weight', 'item_type', 'book_binding',
             'store_quantity_available', 'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
@@ -72,9 +72,10 @@ class OrderItemSerializer(serializers.ModelSerializer):
     class Meta:
         model = OrderItem
         fields = [
-            'id', 'order', 'product', 'sku', 'title', 'category', 
-            'image_url', 'qty_ordered', 'qty_picked', 'qty_short', 
+            'id', 'order', 'product', 'sku', 'title', 'category',
+            'image_url', 'qty_ordered', 'qty_picked', 'qty_short',
             'qty_remaining', 'is_complete', 'shipment_batch',
+            'book_binding', 'book_binding_detail',
             'created_at', 'updated_at'
         ]
         read_only_fields = ['id', 'created_at', 'updated_at']
@@ -146,17 +147,42 @@ class StockExceptionSerializer(serializers.ModelSerializer):
     vendor_name = serializers.SerializerMethodField()
     variation_details = serializers.SerializerMethodField()
     image_url = serializers.SerializerMethodField()
-    
+    book_binding = serializers.SerializerMethodField()
+    book_binding_details = serializers.SerializerMethodField()
+
     class Meta:
         model = StockException
         fields = [
-            'id', 'sku', 'product_title', 'category', 'qty_short', 
-            'order_numbers', 'reported_by', 'reported_by_name', 
+            'id', 'sku', 'product_title', 'category', 'qty_short',
+            'order_numbers', 'reported_by', 'reported_by_name',
             'timestamp', 'resolved', 'ordered_from_company', 'na_cancel', 'notes',
-            'vendor_name', 'variation_details', 'image_url'
+            'vendor_name', 'variation_details', 'image_url',
+            'book_binding', 'book_binding_details'
         ]
         read_only_fields = ['id', 'timestamp']
-    
+
+    def get_book_binding(self, obj):
+        """Whether any of the shorted orders asked for this SKU to be bound"""
+        from .models import OrderItem
+        return OrderItem.objects.filter(
+            sku=obj.sku, order__number__in=obj.order_numbers, book_binding=True
+        ).exists()
+
+    def get_book_binding_details(self, obj):
+        """Per-order binding instructions for the orders this shortage affects"""
+        from .models import OrderItem
+        items = OrderItem.objects.filter(
+            sku=obj.sku, order__number__in=obj.order_numbers, book_binding=True
+        ).select_related('order')
+        return [
+            {
+                'order_number': i.order.number,
+                'qty': i.qty_ordered,
+                'detail': i.book_binding_detail,
+            }
+            for i in items
+        ]
+
     def get_vendor_name(self, obj):
         """Get vendor_name from related product"""
         try:
@@ -196,6 +222,7 @@ class ItemIssueSerializer(serializers.ModelSerializer):
         model = ItemIssue
         fields = [
             'id', 'sku', 'title', 'category', 'subcategory', 'vendor_name', 'image_url',
+            'book_binding',
             'field', 'field_label', 'note', 'report_count',
             'status', 'status_label', 'resolution_notes',
             'reported_by', 'reported_by_name', 'resolved_by', 'resolved_by_name',
@@ -302,6 +329,12 @@ class PickListItemSerializer(serializers.Serializer):
     remaining = serializers.IntegerField()
     store_quantity_available = serializers.IntegerField()
     open_issue_count = serializers.IntegerField()
+    # True when any order needing this SKU asked for binding. book_binding_qty
+    # is how many of `needed` those orders account for, and the details list
+    # breaks that down per order.
+    book_binding = serializers.BooleanField()
+    book_binding_qty = serializers.IntegerField()
+    book_binding_details = serializers.ListField(child=serializers.DictField(), allow_empty=True)
 
 
 class PickActionSerializer(serializers.Serializer):

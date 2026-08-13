@@ -1,6 +1,8 @@
 import api from '@/lib/api';
 
 export interface PickedItem {
+  book_binding?: boolean;
+  book_binding_detail?: string;
   id: number;
   order_id: number;
   order_number: string;

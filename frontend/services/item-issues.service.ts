@@ -14,6 +14,7 @@ export interface ItemIssue {
   subcategory: string;
   vendor_name: string;
   image_url: string | null;
+  book_binding: boolean;
   field: string;
   field_label: string;
   note: string;
