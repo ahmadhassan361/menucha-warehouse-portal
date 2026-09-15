@@ -17,6 +17,9 @@ class OrderImportService:
     def __init__(self, triggered_by=None):
         self.triggered_by = triggered_by
         self.sync_log = None
+        # Running per-(order, product) totals for the sync in progress, see
+        # _upsert_order_item
+        self.line_state = {}
         self.stats = {
             'orders_fetched': 0,
             'orders_created': 0,
@@ -125,6 +128,10 @@ class OrderImportService:
         
         # Track all order IDs we've seen in this sync
         synced_order_ids = set()
+
+        # Quantities accumulate across the feed lines of a single sync, so this
+        # has to start empty or a second sync would add to the first one's totals
+        self.line_state = {}
         
         for category in items_by_category:
             category_name = category.get('category_name', 'Uncategorized')
@@ -141,6 +148,7 @@ class OrderImportService:
                         
                         # Process orders for this item
                         orders_data = item.get('orders', [])
+                        self._validate_item_quantity(item, orders_data)
                         for order_data in orders_data:
                             try:
                                 order = self._upsert_order(order_data)
@@ -200,6 +208,29 @@ class OrderImportService:
         
         self.stats['orders_auto_packed'] = packed_count
     
+    def _validate_item_quantity(self, item: Dict[str, Any], orders_data: List[Dict[str, Any]]):
+        """
+        Cross-check an item's order lines against the total the feed reports.
+
+        The feed carries its own per-item total, so a disagreement means the
+        payload shape changed and the quantities we are about to import can no
+        longer be trusted. Surface it on the sync log rather than silently
+        picking the wrong amount.
+        """
+        expected = item.get('total_quantity_needed')
+        if expected is None:
+            return
+
+        actual = sum(order_data.get('quantity', 1) or 0 for order_data in orders_data)
+        if actual != expected:
+            error_msg = (
+                f"Quantity mismatch for SKU {item.get('sku', 'UNKNOWN')}: "
+                f"order lines total {actual} but feed reports "
+                f"total_quantity_needed {expected}"
+            )
+            logger.warning(error_msg)
+            self.stats['errors'].append(error_msg)
+
     def _upsert_product(self, item: Dict[str, Any], category: str, subcategory: str) -> Product:
         """Create or update product"""
         # Handle SKU - can be int, string, or missing
@@ -279,6 +310,20 @@ class OrderImportService:
         # book_binding_detail is null on lines that need no binding, so its
         # presence is what marks this particular line as a binding job
         detail = str(book_binding_detail).strip() if book_binding_detail else ''
+
+        # One website order can carry several lines for the same SKU - an order
+        # for 18 copies arrives as 18 lines of quantity 1 - but an order item is
+        # unique per (order, product). So each line adds to what earlier lines in
+        # this same sync already contributed; overwriting would keep only the
+        # last line and send the picker out for 1 unit instead of 18.
+        line_key = (order.pk, product.pk)
+        state = self.line_state.setdefault(line_key, {'quantity': 0, 'detail': ''})
+        state['quantity'] += quantity
+        # Binding is decided per line, so the item needs binding if any line asks
+        state['detail'] = state['detail'] or detail
+
+        quantity = state['quantity']
+        detail = state['detail']
         needs_binding = bool(detail)
 
         # Check if this order item already exists
